@@ -26,7 +26,7 @@ class MigrateLegacyDataCommand extends Command
      * @var string
      */
     protected $signature = 'migrate:legacy-data 
-                            {--phase=all : Pilihan phase: all, master, orders, production, downtime, quality, yarn, planning, revisions, samples, audit}
+                            {--phase=all : Pilihan phase: all, master, orders, bookings, planning, revisions, samples, production, quality, wip, downtime, maintenance, targets, flow, waste, yarn, audit}
                             {--dry-run : Jalankan simulasi tanpa menulis perubahan permanen}
                             {--limit= : Batasi jumlah baris per domain untuk pengujian cepat}';
 
@@ -48,7 +48,7 @@ class MigrateLegacyDataCommand extends Command
 
         $this->info('========================================================================');
         $this->info('  A-ERP: Zero Data Loss Enterprise ETL Migration Pipeline (~13M Rows)');
-        $this->info('  Sumber: capacity_system (MariaDB) -> Tujuan: a_erp (22 Tabel Berindeks)');
+        $this->info('  Sumber: capacity_system (MariaDB) -> Tujuan: a_erp (30 Tabel Berindeks)');
         $this->info('  Fase Target: ' . strtoupper($phase) . ' | Mode: ' . ($isDryRun ? 'DRY-RUN (Simulasi)' : 'LIVE PRODUCTION'));
         $this->info('========================================================================');
 
@@ -74,12 +74,20 @@ class MigrateLegacyDataCommand extends Command
                 $this->migrateMasterData($legacyDb, $isDryRun, $limit);
             }
 
+            if ($phase === 'all' || $phase === 'bookings') {
+                $this->migrateBookings($legacyDb, $isDryRun, $limit);
+            }
+
             if ($phase === 'all' || $phase === 'orders') {
                 $this->migrateOrders($legacyDb, $isDryRun, $limit);
             }
 
             if ($phase === 'all' || $phase === 'planning') {
                 $this->migratePlanning($legacyDb, $isDryRun, $limit);
+            }
+
+            if ($phase === 'all' || $phase === 'targets') {
+                $this->migrateMonthlyTargets($legacyDb, $isDryRun, $limit);
             }
 
             if ($phase === 'all' || $phase === 'revisions') {
@@ -90,16 +98,32 @@ class MigrateLegacyDataCommand extends Command
                 $this->migrateSampleApprovals($legacyDb, $isDryRun, $limit);
             }
 
+            if ($phase === 'all' || $phase === 'flow') {
+                $this->migrateFlowTemplates($legacyDb, $isDryRun, $limit);
+            }
+
             if ($phase === 'all' || $phase === 'production') {
                 $this->migrateProduction($legacyDb, $isDryRun, $limit);
+            }
+
+            if ($phase === 'all' || $phase === 'wip') {
+                $this->migrateWipMovements($legacyDb, $isDryRun, $limit);
             }
 
             if ($phase === 'all' || $phase === 'quality') {
                 $this->migrateQuality($legacyDb, $isDryRun, $limit);
             }
 
+            if ($phase === 'all' || $phase === 'waste') {
+                $this->migrateMachineWasteLogs($legacyDb, $isDryRun, $limit);
+            }
+
             if ($phase === 'all' || $phase === 'downtime') {
                 $this->migrateDowntime($legacyDb, $isDryRun, $limit);
+            }
+
+            if ($phase === 'all' || $phase === 'maintenance') {
+                $this->migrateMaintenanceRepliesAndServices($legacyDb, $isDryRun, $limit);
             }
 
             if ($phase === 'all' || $phase === 'yarn') {
@@ -167,7 +191,54 @@ class MigrateLegacyDataCommand extends Command
                 );
             }
         }
-        $this->info('  ✓ 23 Factory Areas berhasil dipetakan.');
+
+        // Seed additional manufacturing, warehouse & storage areas from outflow
+        if (!$isDryRun) {
+            DB::statement("
+                INSERT IGNORE INTO a_erp.factory_areas (plant_id, area_code, area_name, department_type, created_at, updated_at)
+                SELECT 
+                    1 AS plant_id,
+                    UPPER(TRIM(storage_code)) AS area_code,
+                    CONCAT('Storage Area ', UPPER(TRIM(storage_code))) AS area_name,
+                    CASE 
+                        WHEN storage_code LIKE 'ST%' THEN 'SETTING'
+                        WHEN storage_code LIKE 'RS%' THEN 'LINKING'
+                        WHEN storage_code LIKE 'QC%' OR storage_code LIKE 'QBS%' THEN 'QC'
+                        WHEN storage_code LIKE 'PA%' OR storage_code LIKE 'PCK%' OR storage_code LIKE 'LP%' THEN 'PACKING'
+                        WHEN storage_code LIKE 'GS%' OR storage_code LIKE 'STOCK%' THEN 'WAREHOUSE'
+                        ELSE 'KNITTING'
+                    END AS department_type,
+                    NOW(), NOW()
+                FROM (
+                    SELECT storage_in AS storage_code FROM capacity_system.outflow
+                    UNION
+                    SELECT storage_out AS storage_code FROM capacity_system.outflow
+                ) t
+                WHERE storage_code != '' AND storage_code IS NOT NULL;
+            ");
+        }
+        $areaCount = DB::table('factory_areas')->count();
+        $this->info("  ✓ {$areaCount} Factory Areas berhasil dipetakan.");
+
+        // 1.1b Company Holidays (data_libur -> company_holidays)
+        $this->line('  → Migrasi Kalender Libur Pabrik (data_libur)...');
+        if (!$isDryRun) {
+            DB::statement("
+                INSERT IGNORE INTO a_erp.company_holidays
+                (id, plant_id, holiday_date, description, is_working_day, created_at)
+                SELECT 
+                    l.id AS id,
+                    1 AS plant_id,
+                    l.tanggal AS holiday_date,
+                    SUBSTRING(COALESCE(NULLIF(TRIM(l.nama), ''), 'Hari Libur'), 1, 100) AS description,
+                    0 AS is_working_day,
+                    NOW() AS created_at
+                FROM capacity_system.data_libur l
+                ON DUPLICATE KEY UPDATE description = VALUES(description);
+            ");
+        }
+        $holidayCount = DB::table('company_holidays')->count();
+        $this->info("  ✓ {$holidayCount} Hari Libur Pabrik terdaftar.");
 
         // 1.2 Users
         $legacyUsers = $legacyDb->table('user')->get();
@@ -191,8 +262,22 @@ class MigrateLegacyDataCommand extends Command
                     ]
                 );
             }
+
+            // User Area Access (user_areas -> user_area_access)
+            DB::statement("
+                INSERT IGNORE INTO a_erp.user_area_access
+                (user_id, factory_area_id, can_write, created_at)
+                SELECT 
+                    ua.user_id,
+                    ua.area_id AS factory_area_id,
+                    1 AS can_write,
+                    NOW() AS created_at
+                FROM capacity_system.user_areas ua
+                JOIN a_erp.users u ON u.id = ua.user_id
+                JOIN a_erp.factory_areas fa ON fa.id = ua.area_id;
+            ");
         }
-        $this->info("  ✓ " . count($legacyUsers) . " Akun Pengguna (Users) berhasil dipetakan.");
+        $this->info("  ✓ " . count($legacyUsers) . " Akun Pengguna & User Area Access berhasil dipetakan.");
 
         // 1.3 Master Defect Types
         $legacyDefects = $legacyDb->table('master_deffect')->get();
@@ -873,6 +958,348 @@ class MigrateLegacyDataCommand extends Command
     }
 
     /**
+     * 8. Migrasi Pre-Order Slot Bookings (data_booking & data_cancel)
+     */
+    protected function migrateBookings($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE BOOKINGS] Memproses 14.868 Slot Pre-Order Booking (data_booking)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('order_booking_cancellations')->truncate();
+            DB::table('order_bookings')->truncate();
+
+            DB::statement("
+                INSERT IGNORE INTO a_erp.order_bookings
+                (id, buyer_name, booking_code, no_booking, no_order, machine_type_id, estimated_pcs, sisa_pcs, target_month, delivery_date, lead_time_days, notes, status, legacy_status, created_at)
+                SELECT 
+                    b.id_booking AS id,
+                    SUBSTRING(COALESCE(NULLIF(TRIM(b.kd_buyer_booking), ''), 'GENERAL'), 1, 100) AS buyer_name,
+                    CONCAT('BKG-', b.id_booking) AS booking_code,
+                    SUBSTRING(COALESCE(NULLIF(TRIM(b.no_booking), ''), '-'), 1, 100) AS no_booking,
+                    SUBSTRING(COALESCE(NULLIF(TRIM(b.no_order), ''), '-'), 1, 255) AS no_order,
+                    NULL AS machine_type_id,
+                    COALESCE(b.qty_booking, 0) AS estimated_pcs,
+                    COALESCE(b.sisa_booking, 0) AS sisa_pcs,
+                    DATE_FORMAT(COALESCE(NULLIF(b.delivery, '0000-00-00'), NULLIF(b.opd, '0000-00-00'), CURDATE()), '%Y-%m') AS target_month,
+                    COALESCE(NULLIF(b.delivery, '0000-00-00'), CURDATE()) AS delivery_date,
+                    COALESCE(b.lead_time, 0) AS lead_time_days,
+                    CONCAT('Desc: ', COALESCE(b.desc, '-'), ' | Ket: ', COALESCE(b.keterangan, '-'), ' | Needle: ', COALESCE(b.needle, '-'), ' | Seam: ', COALESCE(b.seam, '-')) AS notes,
+                    CASE 
+                        WHEN b.status = 'Cancel Booking' THEN 'CANCELLED'
+                        WHEN b.status = 'Habis' THEN 'CONFIRMED_TO_ORDER'
+                        ELSE 'HOLD'
+                    END AS status,
+                    b.status AS legacy_status,
+                    COALESCE(b.created_at, NOW()) AS created_at
+                FROM capacity_system.data_booking b
+                {$limitSql};
+            ");
+
+            DB::statement("
+                INSERT IGNORE INTO a_erp.order_booking_cancellations
+                (id, order_booking_id, qty_cancel_pcs, reason, created_at)
+                SELECT 
+                    c.id AS id,
+                    CAST(c.id_booking AS UNSIGNED) AS order_booking_id,
+                    COALESCE(c.qty_cancel, 0) AS qty_cancel_pcs,
+                    COALESCE(c.alasan, 'Cancel Booking') AS reason,
+                    NOW() AS created_at
+                FROM capacity_system.data_cancel c
+                JOIN a_erp.order_bookings b ON b.id = CAST(c.id_booking AS UNSIGNED)
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $bkgCount = DB::table('order_bookings')->count();
+        $bkgCancelCount = DB::table('order_booking_cancellations')->count();
+        $this->info("  ✓ Fase Booking Selesai: {$bkgCount} Booking & {$bkgCancelCount} Pembatalan Booking dimigrasi.");
+    }
+
+    /**
+     * 9. Migrasi Target Ekspor & Alokasi Mesin Bulanan (target_export & monthly_mc)
+     */
+    protected function migrateMonthlyTargets($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE TARGETS] Memproses Target Ekspor & Kapasitas Bulanan (target_export)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement("
+                INSERT IGNORE INTO a_erp.monthly_targets
+                (id, plant_id, target_month, target_export_pcs, target_local_pcs, target_efficiency, created_at)
+                SELECT 
+                    te.id AS id,
+                    1 AS plant_id,
+                    COALESCE(DATE_FORMAT(STR_TO_DATE(CONCAT('01-', te.month), '%d-%M-%Y'), '%Y-%m'), '2024-10') AS target_month,
+                    COALESCE(te.qty_target, 0) AS target_export_pcs,
+                    0 AS target_local_pcs,
+                    85.00 AS target_efficiency,
+                    COALESCE(te.created_at, NOW()) AS created_at
+                FROM capacity_system.target_export te
+                {$limitSql}
+                ON DUPLICATE KEY UPDATE target_export_pcs = VALUES(target_export_pcs);
+            ");
+        }
+
+        $targetCount = DB::table('monthly_targets')->count();
+        $this->info("  ✓ Fase Target Selesai: {$targetCount} Target Bulanan tercatat.");
+    }
+
+    /**
+     * 10. Migrasi Master Alur Rute Proses (master_flow_proses -> flow_templates & flow_steps)
+     */
+    protected function migrateFlowTemplates($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE FLOW] Memproses Master Alur Rute Produksi (master_flow_proses)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('flow_steps')->truncate();
+            DB::table('flow_templates')->truncate();
+
+            DB::statement("
+                INSERT IGNORE INTO a_erp.flow_templates
+                (id, name, description, is_active, created_at)
+                SELECT 
+                    m.id_flow AS id,
+                    CONCAT('Flow Rute #', m.id_flow, ' (', COALESCE(NULLIF(m.proses_1, ''), 'START'), ' -> ', COALESCE(NULLIF(m.proses_5, m.proses_4), 'FINISH'), ')') AS name,
+                    CONCAT('Proses: ', COALESCE(m.proses_1,''), ' > ', COALESCE(m.proses_2,''), ' > ', COALESCE(m.proses_3,''), ' > ', COALESCE(m.proses_4,''), ' > ', COALESCE(m.proses_5,'')) AS description,
+                    1 AS is_active,
+                    COALESCE(m.created_at, NOW()) AS created_at
+                FROM capacity_system.master_flow_proses m
+                {$limitSql};
+            ");
+
+            DB::statement("
+                INSERT IGNORE INTO a_erp.flow_steps (flow_template_id, step_order, department_type, area_code, factory_area_id, created_at)
+                SELECT 
+                    steps.id_flow AS flow_template_id,
+                    steps.step_order,
+                    CASE 
+                        WHEN steps.area_code LIKE 'KK%' THEN 'KNITTING'
+                        WHEN steps.area_code LIKE 'RS%' THEN 'LINKING'
+                        WHEN steps.area_code LIKE 'ST%' THEN 'SETTING'
+                        WHEN steps.area_code LIKE 'QC%' OR steps.area_code LIKE 'QBS%' THEN 'QC'
+                        WHEN steps.area_code LIKE 'PCK%' OR steps.area_code LIKE 'PA%' OR steps.area_code LIKE 'LP%' THEN 'PACKING'
+                        WHEN steps.area_code LIKE 'GS%' OR steps.area_code LIKE 'STOCK%' THEN 'WAREHOUSE'
+                        ELSE 'KNITTING'
+                    END AS department_type,
+                    steps.area_code,
+                    fa.id AS factory_area_id,
+                    NOW() AS created_at
+                FROM (
+                    SELECT id_flow, 1 AS step_order, UPPER(TRIM(proses_1)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_1 != '' AND proses_1 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 2 AS step_order, UPPER(TRIM(proses_2)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_2 != '' AND proses_2 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 3 AS step_order, UPPER(TRIM(proses_3)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_3 != '' AND proses_3 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 4 AS step_order, UPPER(TRIM(proses_4)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_4 != '' AND proses_4 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 5 AS step_order, UPPER(TRIM(proses_5)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_5 != '' AND proses_5 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 6 AS step_order, UPPER(TRIM(proses_6)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_6 != '' AND proses_6 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 7 AS step_order, UPPER(TRIM(proses_7)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_7 != '' AND proses_7 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 8 AS step_order, UPPER(TRIM(proses_8)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_8 != '' AND proses_8 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 9 AS step_order, UPPER(TRIM(proses_9)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_9 != '' AND proses_9 IS NOT NULL
+                    UNION ALL
+                    SELECT id_flow, 10 AS step_order, UPPER(TRIM(proses_10)) AS area_code FROM capacity_system.master_flow_proses WHERE proses_10 != '' AND proses_10 IS NOT NULL
+                ) steps
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = steps.area_code;
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $tplCount = DB::table('flow_templates')->count();
+        $stepCount = DB::table('flow_steps')->count();
+        $this->info("  ✓ Fase Alur Rute Selesai: {$tplCount} Template & {$stepCount} Langkah Rute dimigrasi.");
+    }
+
+    /**
+     * 11. Migrasi Perpindahan Fisik Box WIP (outflow -> wip_movements: 1.34M baris)
+     */
+    protected function migrateWipMovements($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE WIP] Memproses 1.344.199 Perpindahan Box Antar-Departemen (outflow)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('wip_movements')->truncate();
+
+            DB::statement("
+                INSERT INTO a_erp.wip_movements
+                (id, movement_date, production_box_id, from_area_id, to_area_id, sent_pcs, received_pcs, dispatched_by, status, remarks, created_at)
+                SELECT 
+                    o.id_outflow AS id,
+                    COALESCE(NULLIF(o.tgl_outflow, '0000-00-00'), '2024-01-01') AS movement_date,
+                    o.id_produksi AS production_box_id,
+                    COALESCE(fa_in.id, 1) AS from_area_id,
+                    COALESCE(fa_out.id, 1) AS to_area_id,
+                    COALESCE(o.qty, 0) AS sent_pcs,
+                    COALESCE(o.qty, 0) AS received_pcs,
+                    COALESCE(u.id, 1) AS dispatched_by,
+                    'RECEIVED' AS status,
+                    CONCAT('Outflow from ', o.storage_in, ' to ', o.storage_out) AS remarks,
+                    COALESCE(o.created_at, NOW()) AS created_at
+                FROM capacity_system.outflow o
+                LEFT JOIN a_erp.factory_areas fa_in ON fa_in.area_code = UPPER(TRIM(o.storage_in))
+                LEFT JOIN a_erp.factory_areas fa_out ON fa_out.area_code = UPPER(TRIM(o.storage_out))
+                LEFT JOIN a_erp.users u ON u.username = o.admin
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $wipCount = DB::table('wip_movements')->count();
+        $this->info("  ✓ Fase WIP Selesai: {$wipCount} Mutasi Box Antar-Area dimigrasi.");
+    }
+
+    /**
+     * 12. Migrasi Balasan Tiket & Servis Rutin Mesin (pengaduan_reply, data_service, data_maintenance)
+     */
+    protected function migrateMaintenanceRepliesAndServices($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE MAINTENANCE] Memproses Balasan Tiket & Riwayat Servis Rutin Mesin...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('maintenance_ticket_replies')->truncate();
+            DB::table('machine_service_checklists')->truncate();
+            DB::table('machine_service_records')->truncate();
+
+            // 12.1 Replies
+            DB::statement("
+                INSERT IGNORE INTO a_erp.maintenance_ticket_replies
+                (id, maintenance_ticket_id, user_id, message, created_at)
+                SELECT 
+                    r.id_reply AS id,
+                    r.id_pengaduan AS maintenance_ticket_id,
+                    COALESCE(u.id, 1) AS user_id,
+                    COALESCE(NULLIF(TRIM(r.isi), ''), '-') AS message,
+                    COALESCE(r.created_at, NOW()) AS created_at
+                FROM capacity_system.pengaduan_reply r
+                JOIN a_erp.maintenance_tickets t ON t.id = r.id_pengaduan
+                LEFT JOIN a_erp.users u ON u.username = r.username
+                {$limitSql};
+            ");
+
+            // 12.2 Service Records
+            DB::statement("
+                INSERT IGNORE INTO a_erp.machine_service_records
+                (id, machine_id, service_date, jarum, technician_name, inspector_name, area_head, factory_area_id, machine_year, serial_number, created_at)
+                SELECT 
+                    s.id_service AS id,
+                    COALESCE(m.id, 1) AS machine_id,
+                    COALESCE(NULLIF(s.tanggal_service, '0000-00-00'), CURDATE()) AS service_date,
+                    s.jarum,
+                    s.nama_petugas AS technician_name,
+                    s.staff_pemeriksa AS inspector_name,
+                    s.kepala_area AS area_head,
+                    fa.id AS factory_area_id,
+                    s.tahun AS machine_year,
+                    s.no_seri AS serial_number,
+                    COALESCE(s.created_at, NOW()) AS created_at
+                FROM capacity_system.data_service s
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(s.area))
+                LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(s.area)), '-MC', LPAD(CAST(s.no_mesin AS SIGNED), 3, '0'))
+                {$limitSql};
+            ");
+
+            // 12.3 Service Checklists
+            DB::statement("
+                INSERT IGNORE INTO a_erp.machine_service_checklists
+                (id, machine_service_record_id, master_maintenance_id, item_name, status, sparepart_name, sparepart_qty, created_at)
+                SELECT 
+                    dm.id_maintenance AS id,
+                    dm.id_service AS machine_service_record_id,
+                    dm.id_master_mt AS master_maintenance_id,
+                    COALESCE(mm.list_maintenance, CONCAT('Inspection Item #', dm.id_master_mt)) AS item_name,
+                    CASE 
+                        WHEN dm.status = 'ok' THEN 'OK'
+                        WHEN dm.status = 'not ok' THEN 'NOT_OK'
+                        ELSE 'NA'
+                    END AS status,
+                    dm.nama_sparepart AS sparepart_name,
+                    COALESCE(dm.qty_sparepart, 0) AS sparepart_qty,
+                    NOW() AS created_at
+                FROM capacity_system.data_maintenance dm
+                JOIN a_erp.machine_service_records sr ON sr.id = dm.id_service
+                LEFT JOIN capacity_system.master_maintenance mm ON mm.id_master_mt = dm.id_master_mt
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $replyCount = DB::table('maintenance_ticket_replies')->count();
+        $srvCount = DB::table('machine_service_records')->count();
+        $chkCount = DB::table('machine_service_checklists')->count();
+        $this->info("  ✓ Fase Maintenance Selesai: {$replyCount} Balasan, {$srvCount} Servis Rutin & {$chkCount} Checklist dimigrasi.");
+    }
+
+    /**
+     * 13. Migrasi Log Waste Harian Mesin (bs_mesin: ~2.55M baris)
+     */
+    protected function migrateMachineWasteLogs($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE WASTE] Memproses Log Waste/Cacat Harian Mesin Rajut (bs_mesin)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('machine_waste_logs')->truncate();
+
+            DB::statement("
+                INSERT INTO a_erp.machine_waste_logs
+                (id, production_date, machine_id, factory_area_id, employee_id, employee_name, shift, style_code, size, inisial, qty_pcs, weight_gram, created_at)
+                SELECT 
+                    b.id_bsmc AS id,
+                    COALESCE(NULLIF(b.tanggal_produksi, '0000-00-00'), '2024-01-01') AS production_date,
+                    COALESCE(m.id, 1) AS machine_id,
+                    fa.id AS factory_area_id,
+                    b.id_karyawan AS employee_id,
+                    b.nama_karyawan AS employee_name,
+                    b.shift,
+                    b.no_model AS style_code,
+                    b.size,
+                    b.inisial,
+                    COALESCE(b.qty_pcs, 0.00) AS qty_pcs,
+                    COALESCE(b.qty_gram, 0.00) AS weight_gram,
+                    COALESCE(b.created_at, NOW()) AS created_at
+                FROM capacity_system.bs_mesin b
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(b.area))
+                LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(b.area)), '-MC', LPAD(CAST(b.no_mesin AS SIGNED), 3, '0'))
+                WHERE (b.qty_pcs > 0 OR b.qty_gram > 0) AND b.tanggal_produksi != '0000-00-00'
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $wasteCount = DB::table('machine_waste_logs')->count();
+        $this->info("  ✓ Fase Waste Selesai: {$wasteCount} Log Waste Mesin Rajut dimigrasi.");
+    }
+
+    /**
      * Tampilkan Tabel Rekonsiliasi Zero Data Loss
      */
     protected function displayAuditReport($legacyDb): void
@@ -883,21 +1310,32 @@ class MigrateLegacyDataCommand extends Command
 
         $tableData = [
             ['Mesin Fisik (machines)', $legacyDb->table('machines')->count(), DB::table('machines')->count()],
-            ['Factory Areas (areas)', $legacyDb->table('areas')->count(), DB::table('factory_areas')->count()],
+            ['Factory Areas (areas + storages)', $legacyDb->table('areas')->count(), DB::table('factory_areas')->count()],
             ['Pengguna (users)', $legacyDb->table('user')->count(), DB::table('users')->count()],
+            ['User Area Access (user_areas)', $legacyDb->table('user_areas')->count(), DB::table('user_area_access')->count()],
+            ['Kalender Libur (data_libur)', $legacyDb->table('data_libur')->count(), DB::table('company_holidays')->count()],
             ['Master Defect (master_deffect)', $legacyDb->table('master_deffect')->count(), DB::table('defect_types')->count()],
             ['Master Downtime (master_downtime)', $legacyDb->table('master_downtime')->count(), DB::table('downtime_reasons')->count()],
+            ['Pre-Order Bookings (data_booking)', $legacyDb->table('data_booking')->count(), DB::table('order_bookings')->count()],
+            ['Booking Cancellations (data_cancel)', $legacyDb->table('data_cancel')->count(), DB::table('order_booking_cancellations')->count()],
             ['Shipments (apsperstyle)', $legacyDb->table('apsperstyle')->count(), DB::table('order_shipments')->count()],
             ['Sample Approvals (pps)', $legacyDb->table('pps')->count(), DB::table('sample_approvals')->count()],
             ['Planning Allocations (detail_planning)', $legacyDb->table('detail_planning')->count(), DB::table('planning_allocations')->count()],
             ['Machine Assignments (tanggal_planning)', $legacyDb->table('tanggal_planning')->count(), DB::table('machine_assignments')->count()],
+            ['Flow Rute (master_flow_proses)', $legacyDb->table('master_flow_proses')->count(), DB::table('flow_templates')->count()],
+            ['Target Bulanan (target_export)', $legacyDb->table('target_export')->count(), DB::table('monthly_targets')->count()],
             ['Order Revisions (history_revisi)', $legacyDb->table('history_revisi')->count(), DB::table('order_revisions')->count()],
             ['Revision Cancel Items (data_cancel_order)', $legacyDb->table('data_cancel_order')->count(), DB::table('order_revision_items')->count()],
             ['Box Produksi (produksi)', $legacyDb->table('produksi')->count(), DB::table('production_boxes')->count()],
             ['Box Cacat (data_bs)', $legacyDb->table('data_bs')->count(), DB::table('box_defects')->count()],
             ['Perbaikan (perbaikan_area)', $legacyDb->table('perbaikan_area')->count(), DB::table('rework_tracking')->count()],
+            ['WIP Movements (outflow)', $legacyDb->table('outflow')->count(), DB::table('wip_movements')->count()],
             ['Downtime Mesin (downtime)', $legacyDb->table('downtime')->count(), DB::table('machine_downtimes')->count()],
-            ['Tiket Servis (pengaduan)', $legacyDb->table('pengaduan')->count(), DB::table('maintenance_tickets')->count()],
+            ['Tiket Pengaduan (pengaduan)', $legacyDb->table('pengaduan')->count(), DB::table('maintenance_tickets')->count()],
+            ['Balasan Tiket (pengaduan_reply)', $legacyDb->table('pengaduan_reply')->count(), DB::table('maintenance_ticket_replies')->count()],
+            ['Servis Mesin (data_service)', $legacyDb->table('data_service')->count(), DB::table('machine_service_records')->count()],
+            ['Checklist Servis (data_maintenance)', $legacyDb->table('data_maintenance')->count(), DB::table('machine_service_checklists')->count()],
+            ['Waste Mesin (bs_mesin)', $legacyDb->table('bs_mesin')->where('tanggal_produksi', '!=', '0000-00-00')->count(), DB::table('machine_waste_logs')->count()],
             ['Stok Benang (stock_area)', $legacyDb->table('stock_area')->count(), DB::table('yarn_stock_balances')->count()],
             ['Audit Logs (audit_logs)', $legacyDb->table('audit_logs')->count(), DB::table('audit_logs')->count()],
         ];

@@ -29,4 +29,20 @@ class EtlMigrationCommandTest extends TestCase
         $this->assertNotNull($sample->machineType);
         $this->assertStringContainsString('-MC', $sample->machine_number);
     }
+
+    public function test_all_supporting_legacy_domains_are_migrated_cleanly(): void
+    {
+        $this->assertGreaterThan(0, \App\Models\CompanyHoliday::count(), 'Company holidays should be populated');
+        $this->assertGreaterThan(0, \App\Models\OrderBooking::count(), 'Order bookings should be populated');
+        $this->assertGreaterThan(0, \App\Models\OrderBookingCancellation::count(), 'Order booking cancellations should be populated');
+        $this->assertGreaterThan(0, \App\Models\MaintenanceTicketReply::count(), 'Ticket replies should be populated');
+        $this->assertGreaterThan(0, \App\Models\FlowTemplate::count(), 'Flow templates should be populated');
+        $this->assertGreaterThan(0, \App\Models\FlowStep::count(), 'Flow steps should be populated');
+        $this->assertGreaterThan(0, \App\Models\WipMovement::count(), 'WIP movements should be populated');
+        $this->assertGreaterThan(0, \App\Models\MachineServiceRecord::count(), 'Machine service records should be populated');
+        $this->assertGreaterThan(0, \App\Models\MachineServiceChecklist::count(), 'Machine service checklists should be populated');
+        $this->assertGreaterThan(0, \App\Models\MachineWasteLog::count(), 'Machine waste logs should be populated');
+        $this->assertGreaterThan(0, \App\Models\MonthlyTarget::count(), 'Monthly targets should be populated');
+        $this->assertGreaterThan(0, \App\Models\UserAreaAccess::count(), 'User area access should be populated');
+    }
 }

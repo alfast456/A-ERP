@@ -16,11 +16,19 @@ class OrderBooking extends Model
     protected $fillable = [
         'buyer_name',
         'booking_code',
+        'no_booking',
+        'no_order',
         'machine_type_id',
+        'needle',
+        'seam',
         'estimated_pcs',
+        'sisa_pcs',
         'target_month',
+        'delivery_date',
+        'lead_time_days',
         'notes',
         'status',
+        'legacy_status',
         'created_at',
     ];
 
@@ -28,7 +36,9 @@ class OrderBooking extends Model
     {
         return [
             'estimated_pcs' => 'integer',
-            'status' => BookingStatus::class,
+            'sisa_pcs' => 'integer',
+            'lead_time_days' => 'integer',
+            'delivery_date' => 'date',
             'created_at' => 'datetime',
         ];
     }
@@ -41,5 +51,10 @@ class OrderBooking extends Model
     public function machineType(): BelongsTo
     {
         return $this->belongsTo(MachineType::class);
+    }
+
+    public function cancellations()
+    {
+        return $this->hasMany(OrderBookingCancellation::class);
     }
 }
