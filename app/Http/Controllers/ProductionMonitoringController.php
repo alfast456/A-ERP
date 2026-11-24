@@ -16,8 +16,8 @@ class ProductionMonitoringController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('po_number', 'like', "%{$search}%")
-                  ->orWhere('buyer_name', 'like', "%{$search}%")
-                  ->orWhere('style_code', 'like', "%{$search}%");
+                    ->orWhere('buyer_name', 'like', "%{$search}%")
+                    ->orWhere('style_code', 'like', "%{$search}%");
             });
         }
 

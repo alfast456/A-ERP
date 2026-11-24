@@ -6,7 +6,6 @@ use App\Enums\MachineStatus;
 use App\Models\Machine;
 use App\Models\Order;
 use App\Models\ProductionBox;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 

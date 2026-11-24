@@ -40,7 +40,7 @@ class MigrateLegacyDataCommand extends Command
         $this->info('================================================================');
         $this->info('  A-ERP: Zero Data Loss ETL Migration Pipeline');
         $this->info('  Sumber: capacity_system (MariaDB) -> Tujuan: a_erp (22 Tabel)');
-        $this->info('  Mode: ' . ($isDryRun ? 'DRY-RUN (Simulasi)' : 'LIVE PRODUCTION'));
+        $this->info('  Mode: '.($isDryRun ? 'DRY-RUN (Simulasi)' : 'LIVE PRODUCTION'));
         $this->info('================================================================');
 
         // 1. Verifikasi Koneksi Database Legacy
@@ -50,7 +50,8 @@ class MigrateLegacyDataCommand extends Command
             $legacyAreaCount = $legacyDb->table('areas')->count();
             $this->info("Koneksi legacy aktif: {$legacyAreaCount} area, {$legacyMachineCount} mesin terdeteksi.");
         } catch (\Throwable $e) {
-            $this->error('Gagal terhubung ke database legacy capacity_system: ' . $e->getMessage());
+            $this->error('Gagal terhubung ke database legacy capacity_system: '.$e->getMessage());
+
             return self::FAILURE;
         }
 
@@ -79,7 +80,7 @@ class MigrateLegacyDataCommand extends Command
                 $deptType = DepartmentType::WAREHOUSE;
             }
 
-            if (!$isDryRun) {
+            if (! $isDryRun) {
                 FactoryArea::firstOrCreate(
                     [
                         'plant_id' => $plant->id,
@@ -103,14 +104,14 @@ class MigrateLegacyDataCommand extends Command
             $machineQuery->limit($limit);
         }
 
-        if (!$isDryRun && !$limit) {
+        if (! $isDryRun && ! $limit) {
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             Machine::truncate();
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
-        $areasByCode = FactoryArea::all()->keyBy(fn($a) => strtoupper(trim($a->area_code)));
-        $areasByName = FactoryArea::all()->keyBy(fn($a) => strtoupper(trim($a->area_name)));
+        $areasByCode = FactoryArea::all()->keyBy(fn ($a) => strtoupper(trim($a->area_code)));
+        $areasByName = FactoryArea::all()->keyBy(fn ($a) => strtoupper(trim($a->area_name)));
 
         $defaultArea = FactoryArea::first();
         $migratedMachines = 0;
@@ -124,28 +125,27 @@ class MigrateLegacyDataCommand extends Command
             $areasByCode,
             $areasByName,
             $defaultArea,
-            $plant,
             $isDryRun
         ) {
             foreach ($machines as $mc) {
                 $rawArea = strtoupper(trim($mc->area ?? 'KK'));
-                $areaObj = $areasByCode->get($rawArea) 
+                $areaObj = $areasByCode->get($rawArea)
                     ?? $areasByName->get($rawArea)
                     ?? $defaultArea;
 
-                $brand = !empty(trim($mc->brand)) ? strtoupper(trim($mc->brand)) : 'LONATI';
+                $brand = ! empty(trim($mc->brand)) ? strtoupper(trim($mc->brand)) : 'LONATI';
                 $needleCount = (int) filter_var($mc->jarum, FILTER_SANITIZE_NUMBER_INT) ?: 144;
                 $cylinder = 3.75;
 
                 $typeKey = "{$brand}-{$cylinder}-{$needleCount}";
-                if (!isset($machineTypesCache[$typeKey])) {
-                    if (!$isDryRun) {
+                if (! isset($machineTypesCache[$typeKey])) {
+                    if (! $isDryRun) {
                         $mType = MachineType::firstOrCreate([
                             'brand' => $brand,
                             'cylinder_inches' => $cylinder,
                             'needle_count' => $needleCount,
                         ], [
-                            'model_name' => !empty($mc->kode) ? $mc->kode : 'SERIES-' . $needleCount,
+                            'model_name' => ! empty($mc->kode) ? $mc->kode : 'SERIES-'.$needleCount,
                             'standard_speed_rpm' => 280,
                         ]);
                         $machineTypesCache[$typeKey] = $mType->id;
@@ -171,7 +171,7 @@ class MigrateLegacyDataCommand extends Command
                     default => MachineStatus::IDLE,
                 };
 
-                if (!$isDryRun) {
+                if (! $isDryRun) {
                     Machine::create([
                         'machine_type_id' => $typeId,
                         'factory_area_id' => $areaObj->id,
@@ -203,6 +203,7 @@ class MigrateLegacyDataCommand extends Command
         );
 
         $this->info('ETL Migration selesai dengan sukses.');
+
         return self::SUCCESS;
     }
 }

@@ -23,6 +23,7 @@ use Tests\TestCase;
 class EloquentModelsAndEnumsTest extends TestCase
 {
     use DatabaseTransactions;
+
     public function test_order_and_shipment_dynamic_sisa_kalkulasi(): void
     {
         $plant = Plant::first();

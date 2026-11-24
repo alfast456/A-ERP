@@ -16,12 +16,8 @@ class OrderReviseService
     /**
      * Terapkan revisi order dengan proteksi ACID & Zero Production Loss.
      *
-     * @param Order $order
-     * @param array $revisionItems List item revisi: [['shipment_id' => int, 'new_qty' => int, 'new_delivery_date' => ?string]]
-     * @param User $requestedBy
-     * @param User|null $approvedBy
-     * @param string $reasonNotes
-     * @return OrderRevision
+     * @param  array  $revisionItems  List item revisi: [['shipment_id' => int, 'new_qty' => int, 'new_delivery_date' => ?string]]
+     *
      * @throws ZeroProductionLossException
      */
     public function applyRevision(
@@ -62,7 +58,7 @@ class OrderReviseService
 
                 $deltaQty = $newQty - $oldQty;
 
-                if ($deltaQty !== 0 || !empty($item['new_delivery_date'])) {
+                if ($deltaQty !== 0 || ! empty($item['new_delivery_date'])) {
                     OrderRevisionItem::create([
                         'order_revision_id' => $revision->id,
                         'order_shipment_id' => $shipment->id,
@@ -73,7 +69,7 @@ class OrderReviseService
                     ]);
 
                     $updatePayload = ['qty_pairs' => $newQty];
-                    if (!empty($item['new_delivery_date'])) {
+                    if (! empty($item['new_delivery_date'])) {
                         $updatePayload['target_delivery_date'] = $item['new_delivery_date'];
                     }
 

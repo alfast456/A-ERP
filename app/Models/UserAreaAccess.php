@@ -11,6 +11,7 @@ class UserAreaAccess extends Model
     use HasFactory;
 
     public $timestamps = false;
+
     protected $table = 'user_area_access';
 
     protected $fillable = [

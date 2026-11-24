@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\FactoryArea;
 use App\Models\Machine;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;

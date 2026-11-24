@@ -16,9 +16,13 @@ class ProcessReviseOrderJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public Order $order;
+
     public array $revisionItems;
+
     public User $requestedBy;
+
     public ?User $approvedBy;
+
     public string $reasonNotes;
 
     /**

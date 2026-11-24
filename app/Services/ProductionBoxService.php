@@ -23,9 +23,8 @@ class ProductionBoxService
     /**
      * Mencatat transaksi output box rajut dan rincian cacat secara atomik.
      *
-     * @param array $payload ['order_shipment_id', 'machine_id', 'operator_id', 'production_date', 'shift', 'good_pairs', 'defect_pairs', 'weight_kg', 'box_barcode'?]
-     * @param array $defects List of ['defect_type_id' => int, 'defect_count_pairs' => int, 'notes' => ?string]
-     * @return ProductionBox
+     * @param  array  $payload  ['order_shipment_id', 'machine_id', 'operator_id', 'production_date', 'shift', 'good_pairs', 'defect_pairs', 'weight_kg', 'box_barcode'?]
+     * @param  array  $defects  List of ['defect_type_id' => int, 'defect_count_pairs' => int, 'notes' => ?string]
      */
     public function recordOutput(array $payload, array $defects = []): ProductionBox
     {

@@ -10,7 +10,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("
+        DB::statement('
             CREATE OR REPLACE VIEW `view_order_shipment_progress` AS
             SELECT 
                 o.id AS order_id,
@@ -44,7 +44,7 @@ return new class extends Migration
                 st.color_code, 
                 st.size, 
                 s.qty_pairs;
-        ");
+        ');
     }
 
     /**
@@ -52,6 +52,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("DROP VIEW IF EXISTS `view_order_shipment_progress`");
+        DB::statement('DROP VIEW IF EXISTS `view_order_shipment_progress`');
     }
 };

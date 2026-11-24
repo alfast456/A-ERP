@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\ZeroProductionLossException;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\OrderReviseService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ class OrderController extends Controller
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
                 $q->where('po_number', 'like', "%{$search}%")
-                  ->orWhere('buyer_name', 'like', "%{$search}%");
+                    ->orWhere('buyer_name', 'like', "%{$search}%");
             });
         }
 
@@ -55,7 +56,7 @@ class OrderController extends Controller
             'items.*.new_delivery_date' => 'nullable|date',
         ]);
 
-        $user = auth()->user() ?? \App\Models\User::first();
+        $user = auth()->user() ?? User::first();
 
         try {
             $reviseService->applyRevision(

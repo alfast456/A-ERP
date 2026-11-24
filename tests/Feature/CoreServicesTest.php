@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Enums\DepartmentType;
 use App\Enums\MachineStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
@@ -25,6 +24,7 @@ use Tests\TestCase;
 class CoreServicesTest extends TestCase
 {
     use DatabaseTransactions;
+
     private function createTestMachine(): Machine
     {
         return Machine::firstOrCreate([
@@ -39,7 +39,7 @@ class CoreServicesTest extends TestCase
     private function createTestShipment(): OrderShipment
     {
         $order = Order::create([
-            'po_number' => 'PO-HELPER-' . uniqid(),
+            'po_number' => 'PO-HELPER-'.uniqid(),
             'buyer_name' => 'BUYER-TEST',
             'order_date' => now()->toDateString(),
             'status' => OrderStatus::IN_PRODUCTION,
@@ -63,7 +63,7 @@ class CoreServicesTest extends TestCase
 
     public function test_capacity_planning_service_calculations(): void
     {
-        $service = new CapacityPlanningService();
+        $service = new CapacityPlanningService;
 
         // Target: 100.000 pasang, SMV: 120 detik, 25 hari kerja, 24 jam/hari, 85% efisiensi
         // 100.000 * 120 = 12.000.000 detik kebutuhan
@@ -78,7 +78,7 @@ class CoreServicesTest extends TestCase
 
     public function test_production_box_service_records_output_and_defects_atomically(): void
     {
-        $service = new ProductionBoxService();
+        $service = new ProductionBoxService;
         $machine = $this->createTestMachine();
         $user = User::first();
         $shipment = $this->createTestShipment();
@@ -110,11 +110,11 @@ class CoreServicesTest extends TestCase
 
     public function test_order_revise_service_increases_quantity_and_creates_revision_item(): void
     {
-        $service = new OrderReviseService();
+        $service = new OrderReviseService;
         $user = User::first();
 
         $order = Order::create([
-            'po_number' => 'PO-REV-TEST-' . uniqid(),
+            'po_number' => 'PO-REV-TEST-'.uniqid(),
             'buyer_name' => 'ADIDAS',
             'season' => 'SP26',
             'order_type' => OrderType::BULK,
@@ -163,12 +163,12 @@ class CoreServicesTest extends TestCase
 
     public function test_order_revise_service_zero_production_loss_protection(): void
     {
-        $service = new OrderReviseService();
+        $service = new OrderReviseService;
         $user = User::first();
         $machine = $this->createTestMachine();
 
         $order = Order::create([
-            'po_number' => 'PO-REV-FAIL-' . uniqid(),
+            'po_number' => 'PO-REV-FAIL-'.uniqid(),
             'buyer_name' => 'PUMA',
             'season' => 'SP26',
             'order_type' => OrderType::BULK,
@@ -194,7 +194,7 @@ class CoreServicesTest extends TestCase
 
         // Mesin sudah merajut 600 pasang
         ProductionBox::create([
-            'box_barcode' => 'BOX-PUMA-' . uniqid(),
+            'box_barcode' => 'BOX-PUMA-'.uniqid(),
             'production_date' => now()->toDateString(),
             'shift' => 1,
             'order_shipment_id' => $shipment->id,

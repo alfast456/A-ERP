@@ -12,6 +12,7 @@ class ReworkTracking extends Model
     use HasFactory;
 
     public $timestamps = false;
+
     protected $table = 'rework_tracking';
 
     protected $fillable = [

@@ -8,7 +8,6 @@ use App\Models\MachineType;
 use App\Models\Order;
 use App\Models\OrderShipment;
 use App\Models\OrderStyle;
-use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -19,7 +18,7 @@ class UserInterfaceRoutesTest extends TestCase
     private function createOrderWithShipment(): Order
     {
         $order = Order::create([
-            'po_number' => 'PO-UI-TEST-' . uniqid(),
+            'po_number' => 'PO-UI-TEST-'.uniqid(),
             'buyer_name' => 'NIKE EUROPE',
             'season' => 'SP26',
             'order_type' => OrderType::BULK,

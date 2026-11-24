@@ -7,7 +7,9 @@ use Exception;
 class ZeroProductionLossException extends Exception
 {
     protected int $shipmentId;
+
     protected int $producedQty;
+
     protected int $requestedQty;
 
     public function __construct(int $shipmentId, int $producedQty, int $requestedQty)

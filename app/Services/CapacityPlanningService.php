@@ -12,12 +12,11 @@ class CapacityPlanningService
      * Total Required Seconds = Target Pairs * SMV Seconds
      * Required Machines = ceil(Total Required Seconds / Available Seconds Per Machine)
      *
-     * @param int $targetPairs Jumlah pasang yang harus diproduksi
-     * @param float $smvSeconds SMV per pasang dalam detik
-     * @param int $workingDays Jumlah hari kerja efektif
-     * @param float $dailyHours Jam operasional per hari (default 24 jam untuk pabrik 3 shift)
-     * @param float $efficiency Target efisiensi lini rajut (contoh: 0.85 = 85%)
-     * @return int
+     * @param  int  $targetPairs  Jumlah pasang yang harus diproduksi
+     * @param  float  $smvSeconds  SMV per pasang dalam detik
+     * @param  int  $workingDays  Jumlah hari kerja efektif
+     * @param  float  $dailyHours  Jam operasional per hari (default 24 jam untuk pabrik 3 shift)
+     * @param  float  $efficiency  Target efisiensi lini rajut (contoh: 0.85 = 85%)
      */
     public function calculateRequiredMachines(
         int $targetPairs,
@@ -39,13 +38,12 @@ class CapacityPlanningService
     /**
      * Hitung persentase beban kapasitas (load percentage) dari mesin aktif.
      *
-     * @param int $activeMachines Jumlah mesin yang aktif
-     * @param int $targetPairs Target kuantitas pasang
-     * @param float $smvSeconds SMV detik
-     * @param int $workingDays Hari kerja
-     * @param float $dailyHours Jam operasional
-     * @param float $efficiency Efisiensi
-     * @return float
+     * @param  int  $activeMachines  Jumlah mesin yang aktif
+     * @param  int  $targetPairs  Target kuantitas pasang
+     * @param  float  $smvSeconds  SMV detik
+     * @param  int  $workingDays  Hari kerja
+     * @param  float  $dailyHours  Jam operasional
+     * @param  float  $efficiency  Efisiensi
      */
     public function calculateLoadPercentage(
         int $activeMachines,
