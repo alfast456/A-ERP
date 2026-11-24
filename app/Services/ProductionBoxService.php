@@ -23,7 +23,7 @@ class ProductionBoxService
     /**
      * Mencatat transaksi output box rajut dan rincian cacat secara atomik.
      *
-     * @param  array  $payload  ['order_shipment_id', 'machine_id', 'operator_id', 'production_date', 'shift', 'good_pcs'|'good_pairs', 'defect_pcs'|'defect_pairs', 'weight_kg', 'box_barcode'?]
+     * @param  array  $payload  ['order_shipment_id', 'machine_id', 'imported_by'|'operator_id', 'production_date', 'shift', 'good_pcs'|'good_pairs', 'defect_pcs'|'defect_pairs', 'weight_kg', 'box_barcode'?]
      * @param  array  $defects  List of ['defect_type_id' => int, 'defect_count_pcs'|'defect_count_pairs' => int, 'notes' => ?string]
      */
     public function recordOutput(array $payload, array $defects = []): ProductionBox
@@ -33,6 +33,7 @@ class ProductionBoxService
 
             $goodPcs = (int) ($payload['good_pcs'] ?? $payload['good_pairs'] ?? 0);
             $defectPcs = (int) ($payload['defect_pcs'] ?? $payload['defect_pairs'] ?? 0);
+            $importedBy = (int) ($payload['imported_by'] ?? $payload['operator_id'] ?? 1);
 
             $box = ProductionBox::create([
                 'box_barcode' => $barcode,
@@ -40,7 +41,7 @@ class ProductionBoxService
                 'shift' => (int) $payload['shift'],
                 'order_shipment_id' => (int) $payload['order_shipment_id'],
                 'machine_id' => (int) $payload['machine_id'],
-                'operator_id' => (int) $payload['operator_id'],
+                'imported_by' => $importedBy,
                 'good_pcs' => $goodPcs,
                 'defect_pcs' => $defectPcs,
                 'weight_kg' => (float) ($payload['weight_kg'] ?? 0.0),

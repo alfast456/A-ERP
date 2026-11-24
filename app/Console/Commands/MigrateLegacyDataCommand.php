@@ -713,7 +713,7 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Box Produksi (Barcode Fisik Asli, No Box, Shift A/B/C & Area Presisi)...');
             DB::statement("
                 INSERT INTO a_erp.production_boxes 
-                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, factory_area_id, operator_id, good_pcs, defect_pcs, weight_kg, created_at)
+                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, factory_area_id, imported_by, good_pcs, defect_pcs, weight_kg, created_at)
                 SELECT 
                     p.id_produksi AS id,
                     COALESCE(NULLIF(TRIM(p.no_box), ''), CONCAT('BOX-', p.id_produksi)) AS box_barcode,
@@ -737,7 +737,7 @@ class MigrateLegacyDataCommand extends Command
                     p.idapsperstyle AS order_shipment_id,
                     COALESCE(m.id, m2.id, 1) AS machine_id,
                     fa.id AS factory_area_id,
-                    COALESCE(u.id, 1) AS operator_id,
+                    COALESCE(u.id, 1) AS imported_by,
                     COALESCE(p.qty_produksi, 0) AS good_pcs,
                     0 AS defect_pcs,
                     0.000 AS weight_kg,

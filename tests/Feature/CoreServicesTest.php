@@ -87,7 +87,7 @@ class CoreServicesTest extends TestCase
         $box = $service->recordOutput([
             'order_shipment_id' => $shipment->id,
             'machine_id' => $machine->id,
-            'operator_id' => $user->id,
+            'imported_by' => $user->id,
             'production_date' => now()->toDateString(),
             'shift' => 1,
             'good_pcs' => 300,
@@ -105,6 +105,9 @@ class CoreServicesTest extends TestCase
         $this->assertStringStartsWith('BOX-', $box->box_barcode);
         $this->assertEquals(300, $box->good_pcs);
         $this->assertEquals(300, $box->good_pairs); // backward-compatible alias
+        $this->assertEquals($user->id, $box->imported_by);
+        $this->assertEquals($user->id, $box->operator_id); // backward-compatible alias
+        $this->assertEquals($user->id, $box->importedBy->id);
         $this->assertCount(1, $box->defects);
         $this->assertEquals(8, $box->defects->first()->defect_count_pcs);
         $this->assertEquals(8, $box->defects->first()->defect_count_pairs); // backward-compatible alias
@@ -203,7 +206,7 @@ class CoreServicesTest extends TestCase
             'shift' => 1,
             'order_shipment_id' => $shipment->id,
             'machine_id' => $machine->id,
-            'operator_id' => $user->id,
+            'imported_by' => $user->id,
             'good_pcs' => 600,
             'defect_pcs' => 0,
             'weight_kg' => 25.000,

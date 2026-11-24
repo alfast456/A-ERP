@@ -25,6 +25,7 @@ class ProductionBox extends Model
         'order_shipment_id',
         'machine_id',
         'factory_area_id',
+        'imported_by',
         'operator_id',
         'good_pcs',
         'defect_pcs',
@@ -73,9 +74,24 @@ class ProductionBox extends Model
         return $this->belongsTo(FactoryArea::class);
     }
 
+    public function importedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'imported_by');
+    }
+
     public function operator(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'operator_id');
+        return $this->importedBy();
+    }
+
+    public function getOperatorIdAttribute(): ?int
+    {
+        return $this->imported_by;
+    }
+
+    public function setOperatorIdAttribute($value): void
+    {
+        $this->attributes['imported_by'] = $value;
     }
 
     public function defects(): HasMany
