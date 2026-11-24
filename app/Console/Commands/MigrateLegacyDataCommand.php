@@ -26,7 +26,7 @@ class MigrateLegacyDataCommand extends Command
      * @var string
      */
     protected $signature = 'migrate:legacy-data 
-                            {--phase=all : Pilihan phase: all, master, orders, production, downtime, quality, yarn, audit}
+                            {--phase=all : Pilihan phase: all, master, orders, production, downtime, quality, yarn, planning, revisions, samples, audit}
                             {--dry-run : Jalankan simulasi tanpa menulis perubahan permanen}
                             {--limit= : Batasi jumlah baris per domain untuk pengujian cepat}';
 
@@ -76,6 +76,18 @@ class MigrateLegacyDataCommand extends Command
 
             if ($phase === 'all' || $phase === 'orders') {
                 $this->migrateOrders($legacyDb, $isDryRun, $limit);
+            }
+
+            if ($phase === 'all' || $phase === 'planning') {
+                $this->migratePlanning($legacyDb, $isDryRun, $limit);
+            }
+
+            if ($phase === 'all' || $phase === 'revisions') {
+                $this->migrateRevisions($legacyDb, $isDryRun, $limit);
+            }
+
+            if ($phase === 'all' || $phase === 'samples') {
+                $this->migrateSampleApprovals($legacyDb, $isDryRun, $limit);
             }
 
             if ($phase === 'all' || $phase === 'production') {
@@ -235,7 +247,14 @@ class MigrateLegacyDataCommand extends Command
                     $areaObj = $areasByCode->get($rawArea) ?? $areasByName->get($rawArea) ?? $defaultArea;
 
                     $brand = !empty(trim($mc->brand)) ? strtoupper(trim($mc->brand)) : 'LONATI';
-                    $needleCount = (int) filter_var($mc->jarum, FILTER_SANITIZE_NUMBER_INT) ?: 144;
+                    $rawJarum = $mc->jarum ?? '';
+                    if (preg_match('/([0-9]+)N/i', $rawJarum, $mJarum)) {
+                        $needleCount = (int) $mJarum[1];
+                    } elseif (preg_match('/([0-9]+)/', $rawJarum, $mJarum)) {
+                        $needleCount = (int) $mJarum[1];
+                    } else {
+                        $needleCount = 144;
+                    }
                     $cylinder = 3.75;
 
                     $typeKey = "{$brand}-{$cylinder}-{$needleCount}";
@@ -299,8 +318,8 @@ class MigrateLegacyDataCommand extends Command
             DB::table('order_styles')->truncate();
             DB::table('orders')->truncate();
 
-            // 2.1 Insert distinct PO / Orders with real buyer name from data_model
-            $this->line('  → Migrasi Header Orders (PO Asli & Real Buyer)...');
+            // 2.1 Insert distinct PO / Orders with real buyer name from data_model and accurate order status
+            $this->line('  → Migrasi Header Orders (PO Asli, Real Buyer & Status Akurat)...');
             DB::statement("
                 INSERT INTO a_erp.orders 
                 (po_number, buyer_name, season, order_type, total_ordered_pairs, order_date, status, created_at, updated_at)
@@ -311,10 +330,15 @@ class MigrateLegacyDataCommand extends Command
                     'BULK' AS order_type,
                     SUM(sub.qty) AS total_ordered_pairs,
                     MIN(sub.delivery_date) AS order_date,
-                    'IN_PRODUCTION' AS status,
+                    CASE 
+                        WHEN MAX(can.idapsperstyle) IS NOT NULL THEN 'CANCELLED'
+                        WHEN MAX(sub.delivery_date) < CURDATE() THEN 'COMPLETED'
+                        ELSE 'IN_PRODUCTION'
+                    END AS status,
                     NOW(), NOW()
                 FROM (
                     SELECT 
+                        a.idapsperstyle,
                         COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel)) AS po_number,
                         a.mastermodel,
                         a.country,
@@ -323,18 +347,19 @@ class MigrateLegacyDataCommand extends Command
                     FROM capacity_system.apsperstyle a
                 ) sub
                 LEFT JOIN capacity_system.data_model dm ON dm.no_model = sub.mastermodel
+                LEFT JOIN (SELECT DISTINCT idapsperstyle FROM capacity_system.data_cancel_order) can ON can.idapsperstyle = sub.idapsperstyle
                 GROUP BY sub.po_number
                 {$limitSql};
             ");
 
-            // 2.2 Insert Order Styles
-            $this->line('  → Migrasi Order Styles SKU...');
+            // 2.2 Insert Order Styles with accurate machine type mapping
+            $this->line('  → Migrasi Order Styles SKU (Mapping Jarum & Tipe Mesin)...');
             DB::statement("
                 INSERT INTO a_erp.order_styles 
                 (order_id, machine_type_id, style_code, color_code, size, smv_seconds, unit_weight_gram, gw_dz, created_at, updated_at)
                 SELECT 
                     o.id AS order_id,
-                    COALESCE(mt.id, 1) AS machine_type_id,
+                    MIN(COALESCE(mt.id, 1)) AS machine_type_id,
                     a.mastermodel AS style_code,
                     COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT') AS color_code,
                     COALESCE(NULLIF(TRIM(a.size), ''), 'ALL') AS size,
@@ -342,8 +367,18 @@ class MigrateLegacyDataCommand extends Command
                     0.00, 0.00, NOW(), NOW()
                 FROM capacity_system.apsperstyle a
                 JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel))
-                LEFT JOIN a_erp.machine_types mt ON mt.brand = a.machinetypeid
-                GROUP BY o.id, COALESCE(mt.id, 1), a.mastermodel, COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
+                LEFT JOIN (
+                    SELECT needle_count, MIN(id) as id 
+                    FROM a_erp.machine_types 
+                    GROUP BY needle_count
+                ) mt ON mt.needle_count = (
+                    CASE 
+                        WHEN a.machinetypeid LIKE '%G%N%' THEN CAST(REGEXP_SUBSTR(a.machinetypeid, '[0-9]+N') AS UNSIGNED)
+                        WHEN a.machinetypeid REGEXP '[0-9]+' THEN CAST(REGEXP_SUBSTR(a.machinetypeid, '[0-9]+') AS UNSIGNED)
+                        ELSE 144
+                    END
+                )
+                GROUP BY o.id, a.mastermodel, COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
                 {$limitSql};
             ");
 
@@ -376,6 +411,186 @@ class MigrateLegacyDataCommand extends Command
     }
 
     /**
+     * 2.4 Migrasi Sample Approvals (pps -> 20.889 baris)
+     */
+    protected function migrateSampleApprovals($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE SAMPLES] Memproses 20.889 Baris Approval Sample PPS (pps -> sample_approvals)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('sample_approvals')->truncate();
+
+            $this->line('  → Migrasi PPS dengan Relasi Order Style & Mesin Fisik...');
+            DB::statement("
+                INSERT INTO a_erp.sample_approvals
+                (id, order_style_id, machine_id, sample_stage, mechanic_approved_by, qa_approved_by, merchandiser_approved_by, is_approved_for_bulk, remarks, approved_at, created_at)
+                SELECT 
+                    p.id_pps AS id,
+                    COALESCE(s.order_style_id, 1) AS order_style_id,
+                    COALESCE(m.id, 1) AS machine_id,
+                    'PRE_PRODUCTION' AS sample_stage,
+                    1 AS mechanic_approved_by,
+                    1 AS qa_approved_by,
+                    1 AS merchandiser_approved_by,
+                    CASE WHEN p.pps_status = 'approved' THEN 1 ELSE 0 END AS is_approved_for_bulk,
+                    SUBSTRING(COALESCE(NULLIF(TRIM(p.notes), ''), p.history, 'PPS Approval Record'), 1, 500) AS remarks,
+                    COALESCE(p.acc_qad, p.acc_mr, p.acc_fu, p.updated_at, NOW()) AS approved_at,
+                    COALESCE(p.created_at, NOW()) AS created_at
+                FROM capacity_system.pps p
+                LEFT JOIN capacity_system.mesin_perinisial mp ON mp.id_mesin_perinisial = p.id_mesin_perinisial
+                LEFT JOIN a_erp.order_shipments s ON s.id = mp.idapsperstyle
+                LEFT JOIN a_erp.machines m ON m.id = mp.mesin
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $sampleCount = DB::table('sample_approvals')->count();
+        $this->info("  ✓ Fase Sample Approvals Selesai: {$sampleCount} Sample Approvals dimigrasi.");
+    }
+
+    /**
+     * 2.5 Migrasi Detail & Tanggal Planning (detail_planning -> 6.554 baris, tanggal_planning -> 51.386 baris)
+     */
+    protected function migratePlanning($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE PLANNING] Memproses Alokasi Kapasitas & Jadwal Mesin (detail_planning & tanggal_planning)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('machine_assignments')->truncate();
+            DB::table('planning_allocations')->truncate();
+
+            // 1. Planning Allocations
+            $this->line('  → Migrasi Alokasi Planning (detail_planning -> planning_allocations)...');
+            DB::statement("
+                INSERT INTO a_erp.planning_allocations
+                (id, order_id, factory_area_id, allocated_pairs, target_start_date, target_end_date, created_at, updated_at)
+                SELECT 
+                    dp.id_detail_pln AS id,
+                    COALESCE(st.order_id, 1) AS order_id,
+                    COALESCE(fa.id, 1) AS factory_area_id,
+                    COALESCE(SUM(tp.mesin * 100), 1000) AS allocated_pairs,
+                    COALESCE(MIN(NULLIF(tp.start_mesin, '0000-00-00')), CURDATE()) AS target_start_date,
+                    COALESCE(MAX(NULLIF(tp.stop_mesin, '0000-00-00')), CURDATE()) AS target_end_date,
+                    NOW(), NOW()
+                FROM capacity_system.detail_planning dp
+                LEFT JOIN (
+                    SELECT style_code, MIN(order_id) as order_id 
+                    FROM a_erp.order_styles 
+                    GROUP BY style_code
+                ) st ON st.style_code = dp.model
+                LEFT JOIN capacity_system.tanggal_planning tp ON tp.id_detail_pln = dp.id_detail_pln
+                LEFT JOIN a_erp.factory_areas fa ON fa.id = 1
+                GROUP BY dp.id_detail_pln
+                {$limitSql};
+            ");
+
+            // 2. Machine Assignments
+            $this->line('  → Migrasi Jadwal Assignment Mesin (tanggal_planning -> machine_assignments)...');
+            DB::statement("
+                INSERT INTO a_erp.machine_assignments
+                (id, planning_allocation_id, machine_id, order_shipment_id, plan_date, target_dz, target_pairs, created_at, updated_at)
+                SELECT 
+                    tp.id AS id,
+                    tp.id_detail_pln AS planning_allocation_id,
+                    COALESCE(m.id, 1) AS machine_id,
+                    COALESCE(sh.id, 1) AS order_shipment_id,
+                    COALESCE(NULLIF(tp.date, '0000-00-00'), CURDATE()) AS plan_date,
+                    ROUND(COALESCE(tp.mesin, 0) * 8.33, 2) AS target_dz,
+                    COALESCE(tp.mesin * 100, 0) AS target_pairs,
+                    NOW(), NOW()
+                FROM capacity_system.tanggal_planning tp
+                JOIN capacity_system.detail_planning dp ON dp.id_detail_pln = tp.id_detail_pln
+                LEFT JOIN a_erp.machines m ON m.id = tp.mesin
+                LEFT JOIN (
+                    SELECT MIN(s.id) as id, st.style_code 
+                    FROM a_erp.order_shipments s 
+                    JOIN a_erp.order_styles st ON st.id = s.order_style_id
+                    GROUP BY st.style_code
+                ) sh ON sh.style_code = dp.model
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $allocCount = DB::table('planning_allocations')->count();
+        $assignCount = DB::table('machine_assignments')->count();
+        $this->info("  ✓ Fase Planning Selesai: {$allocCount} Alokasi & {$assignCount} Machine Assignments dimigrasi.");
+    }
+
+    /**
+     * 2.6 Migrasi Riwayat Revisi & Cancel Order (history_revisi -> 2.222 baris, data_cancel_order -> 163 baris)
+     */
+    protected function migrateRevisions($legacyDb, bool $isDryRun, ?int $limit): void
+    {
+        $this->newLine();
+        $this->info('▶ [FASE REVISIONS] Memproses Riwayat Revisi & Pembatalan Order (history_revisi & data_cancel_order)...');
+
+        $limitSql = $limit ? "LIMIT {$limit}" : "";
+
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('order_revision_items')->truncate();
+            DB::table('order_revisions')->truncate();
+
+            // 1. Order Revisions
+            $this->line('  → Migrasi Header Revisi (history_revisi -> order_revisions)...');
+            DB::statement("
+                INSERT INTO a_erp.order_revisions
+                (id, order_id, revision_number, revision_date, reason_notes, requested_by, approved_by, status)
+                SELECT 
+                    hr.id_history_rev AS id,
+                    COALESCE(st.order_id, 1) AS order_id,
+                    ROW_NUMBER() OVER(PARTITION BY COALESCE(st.order_id, 1) ORDER BY hr.tanggal_rev) AS revision_number,
+                    COALESCE(NULLIF(hr.tanggal_rev, '0000-00-00 00:00:00'), NOW()) AS revision_date,
+                    SUBSTRING(COALESCE(NULLIF(TRIM(hr.keterangan), ''), 'Revision Order'), 1, 500) AS reason_notes,
+                    1 AS requested_by,
+                    1 AS approved_by,
+                    'APPROVED' AS status
+                FROM capacity_system.history_revisi hr
+                LEFT JOIN (
+                    SELECT style_code, MIN(order_id) as order_id 
+                    FROM a_erp.order_styles 
+                    GROUP BY style_code
+                ) st ON st.style_code = hr.model
+                GROUP BY hr.id_history_rev
+                {$limitSql};
+            ");
+
+            // 2. Order Revision Items (Cancelled orders)
+            $this->line('  → Migrasi Detail Pembatalan Item (data_cancel_order -> order_revision_items)...');
+            DB::statement("
+                INSERT INTO a_erp.order_revision_items
+                (id, order_revision_id, order_shipment_id, old_qty, new_qty, delta_qty, created_at)
+                SELECT 
+                    c.id AS id,
+                    1 AS order_revision_id,
+                    c.idapsperstyle AS order_shipment_id,
+                    COALESCE(s.qty_pairs, 0) + c.qty_cancel AS old_qty,
+                    COALESCE(s.qty_pairs, 0) AS new_qty,
+                    -CAST(c.qty_cancel AS SIGNED) AS delta_qty,
+                    NOW() AS created_at
+                FROM capacity_system.data_cancel_order c
+                JOIN a_erp.order_shipments s ON s.id = c.idapsperstyle
+                {$limitSql};
+            ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
+
+        $revCount = DB::table('order_revisions')->count();
+        $itemCount = DB::table('order_revision_items')->count();
+        $this->info("  ✓ Fase Revisi Selesai: {$revCount} Riwayat Revisi & {$itemCount} Detail Item Batal dimigrasi.");
+    }
+
+    /**
      * 3. Migrasi Output Fisik Box Rajut (produksi -> 1.895.052 baris)
      */
     protected function migrateProduction($legacyDb, bool $isDryRun, ?int $limit): void
@@ -389,7 +604,7 @@ class MigrateLegacyDataCommand extends Command
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             DB::table('production_boxes')->truncate();
 
-            $this->line('  → Migrasi Box Produksi dengan Relasi Mesin & Operator Akurat...');
+            $this->line('  → Migrasi Box Produksi dengan Relasi Mesin (Primary & Secondary) & Operator Akurat...');
             DB::statement("
                 INSERT INTO a_erp.production_boxes 
                 (id, box_barcode, production_date, shift, order_shipment_id, machine_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
@@ -404,7 +619,7 @@ class MigrateLegacyDataCommand extends Command
                         ELSE 1 
                     END AS shift,
                     p.idapsperstyle AS order_shipment_id,
-                    COALESCE(m.id, 1) AS machine_id,
+                    COALESCE(m.id, m2.id, 1) AS machine_id,
                     COALESCE(u.id, 1) AS operator_id,
                     COALESCE(p.qty_produksi, 0) AS good_pairs,
                     0 AS defect_pairs,
@@ -412,6 +627,11 @@ class MigrateLegacyDataCommand extends Command
                     COALESCE(p.created_at, NOW()) AS created_at
                 FROM capacity_system.produksi p
                 LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(p.area)), '-MC', LPAD(CAST(p.no_mesin AS SIGNED), 3, '0'))
+                LEFT JOIN (
+                    SELECT MIN(id) as id, CAST(SUBSTRING(machine_number, -3) AS SIGNED) as mc_no
+                    FROM a_erp.machines
+                    GROUP BY CAST(SUBSTRING(machine_number, -3) AS SIGNED)
+                ) m2 ON m2.mc_no = CAST(p.no_mesin AS SIGNED) AND m.id IS NULL AND CAST(p.no_mesin AS SIGNED) > 0
                 LEFT JOIN a_erp.users u ON u.username = p.admin
                 WHERE p.idapsperstyle IN (SELECT id FROM a_erp.order_shipments)
                 {$limitSql};
@@ -504,7 +724,7 @@ class MigrateLegacyDataCommand extends Command
                 (id, machine_id, downtime_reason_id, start_time, end_time, reported_by, technician_id, action_taken, created_at)
                 SELECT 
                     d.id,
-                    COALESCE(m.id, 1) AS machine_id,
+                    COALESCE(m.id, m2.id, 1) AS machine_id,
                     COALESCE(dr.id, 1) AS downtime_reason_id,
                     TIMESTAMP(COALESCE(NULLIF(d.tanggal, '0000-00-00'), '2024-01-01'), '08:00:00') AS start_time,
                     TIMESTAMPADD(MINUTE, GREATEST(0, COALESCE(d.total_time, 0)), TIMESTAMP(COALESCE(NULLIF(d.tanggal, '0000-00-00'), '2024-01-01'), '08:00:00')) AS end_time,
@@ -514,6 +734,11 @@ class MigrateLegacyDataCommand extends Command
                     COALESCE(d.created_at, NOW()) AS created_at
                 FROM capacity_system.downtime d
                 LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(d.area)), '-MC', LPAD(CAST(d.no_mc AS SIGNED), 3, '0'))
+                LEFT JOIN (
+                    SELECT MIN(id) as id, CAST(SUBSTRING(machine_number, -3) AS SIGNED) as mc_no
+                    FROM a_erp.machines
+                    GROUP BY CAST(SUBSTRING(machine_number, -3) AS SIGNED)
+                ) m2 ON m2.mc_no = CAST(d.no_mc AS SIGNED) AND m.id IS NULL AND CAST(d.no_mc AS SIGNED) > 0
                 LEFT JOIN a_erp.downtime_reasons dr ON dr.code = d.breakdown
                 {$limitSql};
             ");
@@ -630,6 +855,11 @@ class MigrateLegacyDataCommand extends Command
             ['Master Defect (master_deffect)', $legacyDb->table('master_deffect')->count(), DB::table('defect_types')->count()],
             ['Master Downtime (master_downtime)', $legacyDb->table('master_downtime')->count(), DB::table('downtime_reasons')->count()],
             ['Shipments (apsperstyle)', $legacyDb->table('apsperstyle')->count(), DB::table('order_shipments')->count()],
+            ['Sample Approvals (pps)', $legacyDb->table('pps')->count(), DB::table('sample_approvals')->count()],
+            ['Planning Allocations (detail_planning)', $legacyDb->table('detail_planning')->count(), DB::table('planning_allocations')->count()],
+            ['Machine Assignments (tanggal_planning)', $legacyDb->table('tanggal_planning')->count(), DB::table('machine_assignments')->count()],
+            ['Order Revisions (history_revisi)', $legacyDb->table('history_revisi')->count(), DB::table('order_revisions')->count()],
+            ['Revision Cancel Items (data_cancel_order)', $legacyDb->table('data_cancel_order')->count(), DB::table('order_revision_items')->count()],
             ['Box Produksi (produksi)', $legacyDb->table('produksi')->count(), DB::table('production_boxes')->count()],
             ['Box Cacat (data_bs)', $legacyDb->table('data_bs')->count(), DB::table('box_defects')->count()],
             ['Perbaikan (perbaikan_area)', $legacyDb->table('perbaikan_area')->count(), DB::table('rework_tracking')->count()],
