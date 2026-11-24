@@ -17,11 +17,12 @@ use App\Models\Plant;
 use App\Models\ProductionBox;
 use App\Models\User;
 use App\Models\YarnStockBalance;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class EloquentModelsAndEnumsTest extends TestCase
 {
+    use DatabaseTransactions;
     public function test_order_and_shipment_dynamic_sisa_kalkulasi(): void
     {
         $plant = Plant::first();
