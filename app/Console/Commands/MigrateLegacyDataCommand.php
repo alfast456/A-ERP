@@ -297,6 +297,8 @@ class MigrateLegacyDataCommand extends Command
                             'machine_type_id' => $typeId,
                             'jarum' => $jarumCode,
                             'factory_area_id' => $areaObj->id,
+                            'brand' => $mc->brand ?? null,
+                            'year_manufactured' => !empty($mc->tahun) ? (int)$mc->tahun : null,
                             'serial_number' => $mc->no_seri ?? null,
                             'status' => $status,
                         ]
@@ -358,18 +360,21 @@ class MigrateLegacyDataCommand extends Command
                 {$limitSql};
             ");
 
-            // 2.2 Insert Order Styles with accurate machine type mapping & full jarum code
-            $this->line('  → Migrasi Order Styles SKU (Preservasi Jarum Penuh & Tipe Mesin)...');
+            // 2.2 Insert Order Styles with accurate machine type mapping, full jarum code & inisial
+            $this->line('  → Migrasi Order Styles SKU (Preservasi Jarum, Inisial, Seam & Factory)...');
             DB::statement("
                 INSERT INTO a_erp.order_styles 
-                (order_id, machine_type_id, jarum, style_code, color_code, size, smv_seconds, unit_weight_gram, gw_dz, created_at, updated_at)
+                (order_id, machine_type_id, jarum, style_code, inisial, color_code, size, seam, factory, smv_seconds, unit_weight_gram, gw_dz, created_at, updated_at)
                 SELECT 
                     o.id AS order_id,
                     COALESCE(MIN(mt_exact.id), MIN(mt_needle.id), 1) AS machine_type_id,
                     COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144') AS jarum,
                     a.mastermodel AS style_code,
+                    COALESCE(NULLIF(TRIM(a.inisial), ''), '-') AS inisial,
                     COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT') AS color_code,
                     COALESCE(NULLIF(TRIM(a.size), ''), 'ALL') AS size,
+                    MAX(NULLIF(TRIM(a.seam), '')) AS seam,
+                    MAX(NULLIF(TRIM(a.factory), '')) AS factory,
                     COALESCE(MAX(CAST(NULLIF(a.smv, '') AS DECIMAL(6,2))), 120.00) AS smv_seconds,
                     0.00, 0.00, NOW(), NOW()
                 FROM capacity_system.apsperstyle a
@@ -386,7 +391,13 @@ class MigrateLegacyDataCommand extends Command
                         ELSE 144
                     END
                 )
-                GROUP BY o.id, a.mastermodel, COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL'), COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144')
+                GROUP BY 
+                    o.id, 
+                    a.mastermodel, 
+                    COALESCE(NULLIF(TRIM(a.inisial), ''), '-'),
+                    COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), 
+                    COALESCE(NULLIF(TRIM(a.size), ''), 'ALL'), 
+                    COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144')
                 {$limitSql};
             ");
 
@@ -406,6 +417,7 @@ class MigrateLegacyDataCommand extends Command
                 JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel))
                 JOIN a_erp.order_styles s ON s.order_id = o.id 
                     AND s.style_code = a.mastermodel
+                    AND s.inisial = COALESCE(NULLIF(TRIM(a.inisial), ''), '-')
                     AND s.color_code = COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT')
                     AND s.size = COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
                     AND s.jarum = COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144')
@@ -613,10 +625,10 @@ class MigrateLegacyDataCommand extends Command
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             DB::table('production_boxes')->truncate();
 
-            $this->line('  → Migrasi Box Produksi (Barcode Fisik Asli, No Box, Shift A/B/C Presisi)...');
+            $this->line('  → Migrasi Box Produksi (Barcode Fisik Asli, No Box, Shift A/B/C & Area Presisi)...');
             DB::statement("
                 INSERT INTO a_erp.production_boxes 
-                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
+                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, factory_area_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
                 SELECT 
                     p.id_produksi AS id,
                     COALESCE(NULLIF(TRIM(p.no_box), ''), CONCAT('BOX-', p.id_produksi)) AS box_barcode,
@@ -639,12 +651,14 @@ class MigrateLegacyDataCommand extends Command
                     GREATEST(0, COALESCE(p.shift_c, 0)) AS shift_c,
                     p.idapsperstyle AS order_shipment_id,
                     COALESCE(m.id, m2.id, 1) AS machine_id,
+                    fa.id AS factory_area_id,
                     COALESCE(u.id, 1) AS operator_id,
                     COALESCE(p.qty_produksi, 0) AS good_pairs,
                     0 AS defect_pairs,
                     0.000 AS weight_kg,
                     COALESCE(p.created_at, NOW()) AS created_at
                 FROM capacity_system.produksi p
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(p.area))
                 LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(p.area)), '-MC', LPAD(CAST(p.no_mesin AS SIGNED), 3, '0'))
                 LEFT JOIN (
                     SELECT MIN(id) as id, CAST(SUBSTRING(machine_number, -3) AS SIGNED) as mc_no

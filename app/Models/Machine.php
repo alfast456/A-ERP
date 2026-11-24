@@ -17,6 +17,8 @@ class Machine extends Model
         'jarum',
         'factory_area_id',
         'machine_number',
+        'brand',
+        'year_manufactured',
         'serial_number',
         'status',
     ];
@@ -25,6 +27,7 @@ class Machine extends Model
     {
         return [
             'status' => MachineStatus::class,
+            'year_manufactured' => 'integer',
         ];
     }
 

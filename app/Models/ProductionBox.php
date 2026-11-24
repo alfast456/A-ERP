@@ -24,6 +24,7 @@ class ProductionBox extends Model
         'shift_c',
         'order_shipment_id',
         'machine_id',
+        'factory_area_id',
         'operator_id',
         'good_pairs',
         'defect_pairs',
@@ -55,6 +56,11 @@ class ProductionBox extends Model
     public function machine(): BelongsTo
     {
         return $this->belongsTo(Machine::class);
+    }
+
+    public function factoryArea(): BelongsTo
+    {
+        return $this->belongsTo(FactoryArea::class);
     }
 
     public function operator(): BelongsTo
