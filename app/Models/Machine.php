@@ -14,6 +14,7 @@ class Machine extends Model
 
     protected $fillable = [
         'machine_type_id',
+        'jarum',
         'factory_area_id',
         'machine_number',
         'serial_number',

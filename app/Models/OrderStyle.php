@@ -14,6 +14,7 @@ class OrderStyle extends Model
     protected $fillable = [
         'order_id',
         'machine_type_id',
+        'jarum',
         'style_code',
         'color_code',
         'size',

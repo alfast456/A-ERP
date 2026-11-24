@@ -227,7 +227,11 @@ class MigrateLegacyDataCommand extends Command
 
         // 1.5 Mesin (3.036 Unit)
         $legacyMachines = $legacyDb->table('machines')->count();
-        if (!$isDryRun && Machine::count() < 3000) {
+        if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('machines')->truncate();
+            DB::table('machine_types')->truncate();
+
             $areasByCode = FactoryArea::all()->keyBy(fn($a) => strtoupper(trim($a->area_code)));
             $areasByName = FactoryArea::all()->keyBy(fn($a) => strtoupper(trim($a->area_name)));
             $defaultArea = FactoryArea::first();
@@ -247,24 +251,24 @@ class MigrateLegacyDataCommand extends Command
                     $areaObj = $areasByCode->get($rawArea) ?? $areasByName->get($rawArea) ?? $defaultArea;
 
                     $brand = !empty(trim($mc->brand)) ? strtoupper(trim($mc->brand)) : 'LONATI';
-                    $rawJarum = $mc->jarum ?? '';
-                    if (preg_match('/([0-9]+)N/i', $rawJarum, $mJarum)) {
+                    $jarumCode = !empty(trim($mc->jarum)) ? strtoupper(trim($mc->jarum)) : 'JC144';
+                    if (preg_match('/([0-9]+)N/i', $jarumCode, $mJarum)) {
                         $needleCount = (int) $mJarum[1];
-                    } elseif (preg_match('/([0-9]+)/', $rawJarum, $mJarum)) {
+                    } elseif (preg_match('/([0-9]+)/', $jarumCode, $mJarum)) {
                         $needleCount = (int) $mJarum[1];
                     } else {
                         $needleCount = 144;
                     }
                     $cylinder = 3.75;
 
-                    $typeKey = "{$brand}-{$cylinder}-{$needleCount}";
+                    $typeKey = "{$brand}-{$jarumCode}-{$cylinder}-{$needleCount}";
                     if (!isset($machineTypesCache[$typeKey])) {
                         $mType = MachineType::firstOrCreate([
                             'brand' => $brand,
+                            'model_name' => $jarumCode,
                             'cylinder_inches' => $cylinder,
                             'needle_count' => $needleCount,
                         ], [
-                            'model_name' => !empty($mc->kode) ? $mc->kode : 'SERIES-' . $needleCount,
                             'standard_speed_rpm' => 280,
                         ]);
                         $machineTypesCache[$typeKey] = $mType->id;
@@ -291,6 +295,7 @@ class MigrateLegacyDataCommand extends Command
                         ['machine_number' => $mcNumber],
                         [
                             'machine_type_id' => $typeId,
+                            'jarum' => $jarumCode,
                             'factory_area_id' => $areaObj->id,
                             'serial_number' => $mc->no_seri ?? null,
                             'status' => $status,
@@ -298,6 +303,7 @@ class MigrateLegacyDataCommand extends Command
                     );
                 }
             });
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
         $this->info("  ✓ {$legacyMachines} Mesin Rajut terpetakan utuh.");
     }
@@ -352,14 +358,15 @@ class MigrateLegacyDataCommand extends Command
                 {$limitSql};
             ");
 
-            // 2.2 Insert Order Styles with accurate machine type mapping
-            $this->line('  → Migrasi Order Styles SKU (Mapping Jarum & Tipe Mesin)...');
+            // 2.2 Insert Order Styles with accurate machine type mapping & full jarum code
+            $this->line('  → Migrasi Order Styles SKU (Preservasi Jarum Penuh & Tipe Mesin)...');
             DB::statement("
                 INSERT INTO a_erp.order_styles 
-                (order_id, machine_type_id, style_code, color_code, size, smv_seconds, unit_weight_gram, gw_dz, created_at, updated_at)
+                (order_id, machine_type_id, jarum, style_code, color_code, size, smv_seconds, unit_weight_gram, gw_dz, created_at, updated_at)
                 SELECT 
                     o.id AS order_id,
-                    MIN(COALESCE(mt.id, 1)) AS machine_type_id,
+                    COALESCE(MIN(mt_exact.id), MIN(mt_needle.id), 1) AS machine_type_id,
+                    COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144') AS jarum,
                     a.mastermodel AS style_code,
                     COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT') AS color_code,
                     COALESCE(NULLIF(TRIM(a.size), ''), 'ALL') AS size,
@@ -367,18 +374,19 @@ class MigrateLegacyDataCommand extends Command
                     0.00, 0.00, NOW(), NOW()
                 FROM capacity_system.apsperstyle a
                 JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel))
+                LEFT JOIN a_erp.machine_types mt_exact ON mt_exact.model_name = UPPER(TRIM(a.machinetypeid))
                 LEFT JOIN (
                     SELECT needle_count, MIN(id) as id 
                     FROM a_erp.machine_types 
                     GROUP BY needle_count
-                ) mt ON mt.needle_count = (
+                ) mt_needle ON mt_needle.needle_count = (
                     CASE 
                         WHEN a.machinetypeid LIKE '%G%N%' THEN CAST(REGEXP_SUBSTR(a.machinetypeid, '[0-9]+N') AS UNSIGNED)
                         WHEN a.machinetypeid REGEXP '[0-9]+' THEN CAST(REGEXP_SUBSTR(a.machinetypeid, '[0-9]+') AS UNSIGNED)
                         ELSE 144
                     END
                 )
-                GROUP BY o.id, a.mastermodel, COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
+                GROUP BY o.id, a.mastermodel, COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL'), COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144')
                 {$limitSql};
             ");
 
@@ -400,6 +408,7 @@ class MigrateLegacyDataCommand extends Command
                     AND s.style_code = a.mastermodel
                     AND s.color_code = COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT')
                     AND s.size = COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
+                    AND s.jarum = COALESCE(NULLIF(TRIM(a.machinetypeid), ''), 'JC144')
                 {$limitSql};
             ");
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
@@ -604,20 +613,30 @@ class MigrateLegacyDataCommand extends Command
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             DB::table('production_boxes')->truncate();
 
-            $this->line('  → Migrasi Box Produksi dengan Relasi Mesin (Primary & Secondary) & Operator Akurat...');
+            $this->line('  → Migrasi Box Produksi (Barcode Fisik Asli, No Box, Shift A/B/C Presisi)...');
             DB::statement("
                 INSERT INTO a_erp.production_boxes 
-                (id, box_barcode, production_date, shift, order_shipment_id, machine_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
+                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
                 SELECT 
                     p.id_produksi AS id,
-                    CONCAT(COALESCE(NULLIF(TRIM(p.no_box), ''), 'BOX'), '-', p.id_produksi) AS box_barcode,
+                    COALESCE(NULLIF(TRIM(p.no_box), ''), CONCAT('BOX-', p.id_produksi)) AS box_barcode,
+                    COALESCE(NULLIF(TRIM(p.no_box), ''), '-') AS no_box,
+                    COALESCE(p.no_label, 1) AS no_label,
                     COALESCE(NULLIF(p.tgl_produksi, '0000-00-00'), '2024-01-01') AS production_date,
                     CASE 
-                        WHEN p.shift = 'A' OR p.shift = '1' THEN 1
+                        WHEN COALESCE(p.shift_a, 0) > 0 AND COALESCE(p.shift_b, 0) <= 0 AND COALESCE(p.shift_c, 0) <= 0 THEN 1
+                        WHEN COALESCE(p.shift_b, 0) > 0 AND COALESCE(p.shift_a, 0) <= 0 AND COALESCE(p.shift_c, 0) <= 0 THEN 2
+                        WHEN COALESCE(p.shift_c, 0) > 0 AND COALESCE(p.shift_a, 0) <= 0 AND COALESCE(p.shift_b, 0) <= 0 THEN 3
+                        WHEN COALESCE(p.shift_c, 0) >= COALESCE(p.shift_b, 0) AND COALESCE(p.shift_c, 0) >= COALESCE(p.shift_a, 0) AND COALESCE(p.shift_c, 0) > 0 THEN 3
+                        WHEN COALESCE(p.shift_b, 0) >= COALESCE(p.shift_a, 0) AND COALESCE(p.shift_b, 0) > 0 THEN 2
+                        WHEN COALESCE(p.shift_a, 0) > 0 THEN 1
                         WHEN p.shift = 'B' OR p.shift = '2' THEN 2
                         WHEN p.shift = 'C' OR p.shift = '3' THEN 3
                         ELSE 1 
                     END AS shift,
+                    GREATEST(0, COALESCE(p.shift_a, 0)) AS shift_a,
+                    GREATEST(0, COALESCE(p.shift_b, 0)) AS shift_b,
+                    GREATEST(0, COALESCE(p.shift_c, 0)) AS shift_c,
                     p.idapsperstyle AS order_shipment_id,
                     COALESCE(m.id, m2.id, 1) AS machine_id,
                     COALESCE(u.id, 1) AS operator_id,
