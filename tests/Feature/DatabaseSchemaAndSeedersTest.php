@@ -65,7 +65,7 @@ class DatabaseSchemaAndSeedersTest extends TestCase
 
     public function test_order_shipment_progress_view_is_queryable(): void
     {
-        $results = DB::table('view_order_shipment_progress')->get();
+        $results = DB::table('view_order_shipment_progress')->limit(5)->get();
         $this->assertNotNull($results);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OrderShipment;
+use App\Models\ProductionBox;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -31,10 +33,10 @@ class ProductionMonitoringController extends Controller
 
         $progressList = $query->orderBy('target_delivery_date')->paginate(15);
 
-        $totalOrdered = DB::table('view_order_shipment_progress')->sum('ordered_qty');
-        $totalGood = DB::table('view_order_shipment_progress')->sum('produced_good_qty');
-        $totalDefect = DB::table('view_order_shipment_progress')->sum('produced_defect_qty');
-        $totalSisa = DB::table('view_order_shipment_progress')->sum('sisa_pairs');
+        $totalOrdered = (int) OrderShipment::sum('qty_pairs');
+        $totalGood = (int) ProductionBox::sum('good_pairs');
+        $totalDefect = (int) ProductionBox::sum('defect_pairs');
+        $totalSisa = max(0, $totalOrdered - $totalGood);
 
         return view('production.monitoring', compact(
             'progressList',

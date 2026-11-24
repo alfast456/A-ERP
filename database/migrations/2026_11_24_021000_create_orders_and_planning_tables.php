@@ -32,8 +32,8 @@ return new class extends Migration
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
             $table->unsignedInteger('machine_type_id');
             $table->string('style_code', 50);
-            $table->string('color_code', 30);
-            $table->string('size', 20);
+            $table->string('color_code', 150);
+            $table->string('size', 50);
             $table->decimal('smv_seconds', 6, 2)->default(120.00)->comment('SMV detik per pasang');
             $table->decimal('unit_weight_gram', 6, 2)->default(0.00);
             $table->decimal('gw_dz', 6, 2)->default(0.00)->comment('Gross Weight per Lusin');

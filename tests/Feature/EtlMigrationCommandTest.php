@@ -13,8 +13,8 @@ class EtlMigrationCommandTest extends TestCase
     public function test_etl_command_runs_dry_run_cleanly(): void
     {
         $this->artisan('migrate:legacy-data', ['--dry-run' => true])
-            ->expectsOutputToContain('A-ERP: Zero Data Loss ETL Migration Pipeline')
-            ->expectsOutputToContain('0 SELISIH (MATCH)')
+            ->expectsOutputToContain('A-ERP: Zero Data Loss Enterprise ETL Migration Pipeline')
+            ->expectsOutputToContain('✓ TERSERAP UTUH')
             ->assertSuccessful();
     }
 

@@ -23,7 +23,7 @@ class UserInterfaceRoutesTest extends TestCase
             'season' => 'SP26',
             'order_type' => OrderType::BULK,
             'total_ordered_pairs' => 1200,
-            'order_date' => now()->toDateString(),
+            'order_date' => '2099-12-31',
             'status' => OrderStatus::IN_PRODUCTION,
         ]);
 
