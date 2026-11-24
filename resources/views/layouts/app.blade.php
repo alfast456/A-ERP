@@ -38,25 +38,60 @@
             </div>
 
             <!-- Navigation Links -->
-            <nav class="hidden md:flex items-center space-x-1">
-                <a href="{{ route('dashboard') }}" class="px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('dashboard') ? 'bg-slate-800 text-emerald-400' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    📊 Dashboard
+            <nav class="hidden lg:flex items-center space-x-1 text-xs">
+                <a href="{{ route('dashboard') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('dashboard') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Dashboard
                 </a>
-                <a href="{{ route('orders.index') }}" class="px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('orders.*') ? 'bg-slate-800 text-emerald-400' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    📦 Orders & Revisi
+                <a href="{{ route('orders.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('orders.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Orders
                 </a>
-                <a href="{{ route('production.monitoring') }}" class="px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('production.monitoring') ? 'bg-slate-800 text-emerald-400' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
-                    ⚡ Live Sisa Produksi
+                <a href="{{ route('production.monitoring') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('production.monitoring') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Sisa Produksi
+                </a>
+                <a href="{{ route('machines.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('machines.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Mesin (3.036)
+                </a>
+                <a href="{{ route('quality.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('quality.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Kualitas & BS
+                </a>
+                <a href="{{ route('downtimes.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('downtimes.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Downtime
+                </a>
+                <a href="{{ route('maintenance.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('maintenance.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Servis Tiket
+                </a>
+                <a href="{{ route('yarn.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('yarn.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Benang
+                </a>
+                <a href="{{ route('capacity.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('capacity.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Kapasitas
+                </a>
+                <a href="{{ route('audit.index') }}" class="px-2.5 py-1.5 rounded-md font-medium transition {{ request()->routeIs('audit.*') ? 'bg-slate-800 text-emerald-400 font-semibold' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                    Audit
                 </a>
             </nav>
 
-            <!-- User Badge -->
-            <div class="flex items-center space-x-2 text-sm text-slate-300">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>DB: <strong class="text-white">a_erp</strong> (22 Tabel)</span>
+            <!-- Status Indicator -->
+            <div class="flex items-center space-x-2 text-xs text-slate-300">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>DB: <strong class="text-white">a_erp</strong> (6.7M Rows)</span>
             </div>
         </div>
     </header>
+
+    <!-- Sub-navigation for mobile / small screen -->
+    <div class="lg:hidden bg-slate-800 text-slate-200 border-b border-slate-700 overflow-x-auto text-xs py-2 px-4 flex items-center space-x-3 whitespace-nowrap">
+        <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'text-emerald-400 font-bold' : '' }}">Dashboard</a>
+        <a href="{{ route('orders.index') }}" class="{{ request()->routeIs('orders.*') ? 'text-emerald-400 font-bold' : '' }}">Orders</a>
+        <a href="{{ route('production.monitoring') }}" class="{{ request()->routeIs('production.monitoring') ? 'text-emerald-400 font-bold' : '' }}">Sisa Produksi</a>
+        <a href="{{ route('machines.index') }}" class="{{ request()->routeIs('machines.*') ? 'text-emerald-400 font-bold' : '' }}">Mesin</a>
+        <a href="{{ route('quality.index') }}" class="{{ request()->routeIs('quality.*') ? 'text-emerald-400 font-bold' : '' }}">Kualitas</a>
+        <a href="{{ route('downtimes.index') }}" class="{{ request()->routeIs('downtimes.*') ? 'text-emerald-400 font-bold' : '' }}">Downtime</a>
+        <a href="{{ route('maintenance.index') }}" class="{{ request()->routeIs('maintenance.*') ? 'text-emerald-400 font-bold' : '' }}">Servis</a>
+        <a href="{{ route('yarn.index') }}" class="{{ request()->routeIs('yarn.*') ? 'text-emerald-400 font-bold' : '' }}">Benang</a>
+        <a href="{{ route('capacity.index') }}" class="{{ request()->routeIs('capacity.*') ? 'text-emerald-400 font-bold' : '' }}">Kapasitas</a>
+        <a href="{{ route('audit.index') }}" class="{{ request()->routeIs('audit.*') ? 'text-emerald-400 font-bold' : '' }}">Audit</a>
+    </div>
 
     <!-- Main Content Area -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

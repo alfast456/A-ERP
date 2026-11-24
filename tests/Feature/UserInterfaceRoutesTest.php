@@ -106,4 +106,88 @@ class UserInterfaceRoutesTest extends TestCase
         $response->assertSee('Live Sisa Order & Monitoring Produksi');
         $response->assertSee('Total Sisa Harus Dirajut');
     }
+
+    public function test_machines_index_route_is_accessible(): void
+    {
+        $response = $this->get(route('machines.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Inventaris & Telemetri Mesin Rajut', false);
+        $response->assertSee('Running / Beroperasi');
+    }
+
+    public function test_quality_index_route_is_accessible(): void
+    {
+        $response = $this->get(route('quality.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Kendali Mutu, Data Cacat (BS) & Perbaikan', false);
+        $response->assertSee('Detail Data Cacat Box');
+
+        $reworkResponse = $this->get(route('quality.index', ['tab' => 'rework']));
+        $reworkResponse->assertStatus(200);
+        $reworkResponse->assertSee('Siklus Perbaikan & Rework', false);
+    }
+
+    public function test_downtimes_index_route_is_accessible(): void
+    {
+        $response = $this->get(route('downtimes.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Analisis Downtime & Keandalan Mesin', false);
+        $response->assertSee('Top 6 Penyebab Downtime Terbanyak');
+    }
+
+    public function test_maintenance_index_and_ticket_creation_is_accessible(): void
+    {
+        $response = $this->get(route('maintenance.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Tiket Servis & Pengaduan Mesin', false);
+        $response->assertSee('Tiket Open');
+
+        $machine = \App\Models\Machine::first();
+
+        $createResponse = $this->post(route('maintenance.store'), [
+            'machine_id' => $machine->id,
+            'priority' => 'HIGH',
+            'issue_description' => 'Sensor benang putus perlu dikalibrasi ulang segera',
+        ]);
+
+        $createResponse->assertRedirect(route('maintenance.index'));
+        $createResponse->assertSessionHas('success');
+
+        $this->assertDatabaseHas('maintenance_tickets', [
+            'machine_id' => $machine->id,
+            'priority' => 'HIGH',
+            'issue_description' => 'Sensor benang putus perlu dikalibrasi ulang segera',
+        ]);
+    }
+
+    public function test_yarn_index_route_is_accessible(): void
+    {
+        $response = $this->get(route('yarn.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Saldo & Logistik Benang Lantai Rajut', false);
+        $response->assertSee('Total Gulungan (Cones)');
+    }
+
+    public function test_capacity_index_route_is_accessible(): void
+    {
+        $response = $this->get(route('capacity.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Perencanaan Kapasitas & Beban Mesin', false);
+        $response->assertSee('Kapasitas Harian / Mesin');
+    }
+
+    public function test_audit_index_route_is_accessible(): void
+    {
+        $response = $this->get(route('audit.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Enterprise Audit Trail & Log Sistem', false);
+        $response->assertSee('Total Log:');
+    }
 }
