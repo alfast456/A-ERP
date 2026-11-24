@@ -294,48 +294,63 @@ class MigrateLegacyDataCommand extends Command
         $limitSql = $limit ? "LIMIT {$limit}" : "";
 
         if (!$isDryRun) {
-            // 2.1 Insert distinct PO / Orders
-            $this->line('  → Migrasi Header Orders...');
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('order_shipments')->truncate();
+            DB::table('order_styles')->truncate();
+            DB::table('orders')->truncate();
+
+            // 2.1 Insert distinct PO / Orders with real buyer name from data_model
+            $this->line('  → Migrasi Header Orders (PO Asli & Real Buyer)...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.orders 
+                INSERT INTO a_erp.orders 
                 (po_number, buyer_name, season, order_type, total_ordered_pairs, order_date, status, created_at, updated_at)
                 SELECT 
-                    COALESCE(NULLIF(TRIM(mastermodel), ''), 'LEGACY-UNASSIGNED') AS po_number,
-                    COALESCE(MAX(NULLIF(TRIM(factory), '')), 'GENERAL BUYER') AS buyer_name,
-                    'REGULAR' AS season,
+                    sub.po_number,
+                    COALESCE(MAX(NULLIF(TRIM(dm.kd_buyer_order), '')), 'GENERAL BUYER') AS buyer_name,
+                    COALESCE(MAX(NULLIF(TRIM(sub.country), '')), 'REGULAR') AS season,
                     'BULK' AS order_type,
-                    COALESCE(SUM(qty), 0) AS total_ordered_pairs,
-                    COALESCE(MIN(NULLIF(delivery, '0000-00-00')), CURDATE()) AS order_date,
+                    SUM(sub.qty) AS total_ordered_pairs,
+                    MIN(sub.delivery_date) AS order_date,
                     'IN_PRODUCTION' AS status,
                     NOW(), NOW()
-                FROM capacity_system.apsperstyle
-                GROUP BY COALESCE(NULLIF(TRIM(mastermodel), ''), 'LEGACY-UNASSIGNED')
+                FROM (
+                    SELECT 
+                        COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel)) AS po_number,
+                        a.mastermodel,
+                        a.country,
+                        COALESCE(a.qty, 0) AS qty,
+                        COALESCE(NULLIF(a.delivery, '0000-00-00'), CURDATE()) AS delivery_date
+                    FROM capacity_system.apsperstyle a
+                ) sub
+                LEFT JOIN capacity_system.data_model dm ON dm.no_model = sub.mastermodel
+                GROUP BY sub.po_number
                 {$limitSql};
             ");
 
             // 2.2 Insert Order Styles
             $this->line('  → Migrasi Order Styles SKU...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.order_styles 
+                INSERT INTO a_erp.order_styles 
                 (order_id, machine_type_id, style_code, color_code, size, smv_seconds, unit_weight_gram, gw_dz, created_at, updated_at)
                 SELECT 
                     o.id AS order_id,
-                    1 AS machine_type_id,
-                    COALESCE(NULLIF(TRIM(a.mastermodel), ''), 'LEGACY-UNASSIGNED') AS style_code,
+                    COALESCE(mt.id, 1) AS machine_type_id,
+                    a.mastermodel AS style_code,
                     COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT') AS color_code,
                     COALESCE(NULLIF(TRIM(a.size), ''), 'ALL') AS size,
                     COALESCE(MAX(CAST(NULLIF(a.smv, '') AS DECIMAL(6,2))), 120.00) AS smv_seconds,
                     0.00, 0.00, NOW(), NOW()
                 FROM capacity_system.apsperstyle a
-                JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.mastermodel), ''), 'LEGACY-UNASSIGNED')
-                GROUP BY o.id, COALESCE(NULLIF(TRIM(a.mastermodel), ''), 'LEGACY-UNASSIGNED'), COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
+                JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel))
+                LEFT JOIN a_erp.machine_types mt ON mt.brand = a.machinetypeid
+                GROUP BY o.id, COALESCE(mt.id, 1), a.mastermodel, COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT'), COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
                 {$limitSql};
             ");
 
             // 2.3 Insert Order Shipments (Preserving idapsperstyle)
             $this->line('  → Migrasi Order Shipments (Multi-Delivery Preserved)...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.order_shipments 
+                INSERT INTO a_erp.order_shipments 
                 (id, order_style_id, shipment_index, target_delivery_date, qty_pairs, created_at, updated_at)
                 SELECT 
                     a.idapsperstyle AS id,
@@ -345,13 +360,14 @@ class MigrateLegacyDataCommand extends Command
                     COALESCE(a.qty, 0) AS qty_pairs,
                     NOW(), NOW()
                 FROM capacity_system.apsperstyle a
-                JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.mastermodel), ''), 'LEGACY-UNASSIGNED')
+                JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel))
                 JOIN a_erp.order_styles s ON s.order_id = o.id 
-                    AND s.style_code = COALESCE(NULLIF(TRIM(a.mastermodel), ''), 'LEGACY-UNASSIGNED')
+                    AND s.style_code = a.mastermodel
                     AND s.color_code = COALESCE(NULLIF(TRIM(a.color), ''), 'DEFAULT')
                     AND s.size = COALESCE(NULLIF(TRIM(a.size), ''), 'ALL')
                 {$limitSql};
             ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
         $orderCount = Order::count();
@@ -370,8 +386,12 @@ class MigrateLegacyDataCommand extends Command
         $limitSql = $limit ? "LIMIT {$limit}" : "";
 
         if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('production_boxes')->truncate();
+
+            $this->line('  → Migrasi Box Produksi dengan Relasi Mesin & Operator Akurat...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.production_boxes 
+                INSERT INTO a_erp.production_boxes 
                 (id, box_barcode, production_date, shift, order_shipment_id, machine_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
                 SELECT 
                     p.id_produksi AS id,
@@ -384,16 +404,19 @@ class MigrateLegacyDataCommand extends Command
                         ELSE 1 
                     END AS shift,
                     p.idapsperstyle AS order_shipment_id,
-                    1 AS machine_id,
-                    1 AS operator_id,
+                    COALESCE(m.id, 1) AS machine_id,
+                    COALESCE(u.id, 1) AS operator_id,
                     COALESCE(p.qty_produksi, 0) AS good_pairs,
                     0 AS defect_pairs,
                     0.000 AS weight_kg,
                     COALESCE(p.created_at, NOW()) AS created_at
                 FROM capacity_system.produksi p
+                LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(p.area)), '-MC', LPAD(CAST(p.no_mesin AS SIGNED), 3, '0'))
+                LEFT JOIN a_erp.users u ON u.username = p.admin
                 WHERE p.idapsperstyle IN (SELECT id FROM a_erp.order_shipments)
                 {$limitSql};
             ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
         $totalBoxes = DB::table('production_boxes')->count();
@@ -411,27 +434,31 @@ class MigrateLegacyDataCommand extends Command
         $limitSql = $limit ? "LIMIT {$limit}" : "";
 
         if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('box_defects')->truncate();
+            DB::table('rework_tracking')->truncate();
+
             // 4.1 Box Defects
             $this->line('  → Migrasi Detail Cacat Box (data_bs)...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.box_defects 
+                INSERT INTO a_erp.box_defects 
                 (id, production_box_id, defect_type_id, defect_count_pairs, notes, created_at)
                 SELECT 
                     b.idbs AS id,
                     COALESCE(b.idapsperstyle, 1) AS production_box_id,
                     COALESCE(dt.id, 1) AS defect_type_id,
                     COALESCE(b.qty, 1) AS defect_count_pairs,
-                    SUBSTRING(CONCAT('Legacy BS: ', COALESCE(b.kode_deffect, 'N/A'), ' | Area: ', COALESCE(b.area, 'N/A'), ' | Box: ', COALESCE(b.no_box, '-')), 1, 255) AS notes,
+                    SUBSTRING(CONCAT('Legacy BS: ', COALESCE(b.kode_deffect, 'N/A'), ' | Area: ', COALESCE(b.area, 'N/A'), ' | Box: ', COALESCE(b.no_box, '-'), ' | Label: ', COALESCE(b.no_label, '-')), 1, 255) AS notes,
                     COALESCE(b.created_at, NOW()) AS created_at
                 FROM capacity_system.data_bs b
                 LEFT JOIN a_erp.defect_types dt ON dt.defect_code = b.kode_deffect
                 {$limitSql};
             ");
 
-            // 4.2 Rework Tracking
+            // 4.2 Rework Tracking with accurate factory area
             $this->line('  → Migrasi Riwayat Perbaikan (perbaikan_area)...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.rework_tracking 
+                INSERT INTO a_erp.rework_tracking 
                 (id, production_box_id, defect_type_id, sent_pairs, repaired_pairs, scrapped_pairs, status, repair_area_id, created_at)
                 SELECT 
                     r.id_perbaikan AS id,
@@ -439,14 +466,16 @@ class MigrateLegacyDataCommand extends Command
                     COALESCE(dt.id, 1) AS defect_type_id,
                     COALESCE(r.qty, 1) AS sent_pairs,
                     CASE WHEN r.out_pb = '1' THEN COALESCE(r.qty, 1) ELSE 0 END AS repaired_pairs,
-                    CASE WHEN r.out_pb = '0' THEN 0 ELSE 0 END AS scrapped_pairs,
+                    0 AS scrapped_pairs,
                     CASE WHEN r.out_pb = '1' THEN 'RESOLVED' ELSE 'IN_REPAIR' END AS status,
-                    1 AS repair_area_id,
+                    COALESCE(fa.id, 1) AS repair_area_id,
                     COALESCE(r.created_at, NOW()) AS created_at
                 FROM capacity_system.perbaikan_area r
                 LEFT JOIN a_erp.defect_types dt ON dt.defect_code = r.kode_deffect
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(r.area))
                 {$limitSql};
             ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
         $defectCount = DB::table('box_defects')->count();
@@ -465,12 +494,17 @@ class MigrateLegacyDataCommand extends Command
         $limitSql = $limit ? "LIMIT {$limit}" : "";
 
         if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('machine_downtimes')->truncate();
+            DB::table('maintenance_tickets')->truncate();
+
+            $this->line('  → Migrasi Downtime dengan Relasi Mesin Fisik Akurat...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.machine_downtimes 
+                INSERT INTO a_erp.machine_downtimes 
                 (id, machine_id, downtime_reason_id, start_time, end_time, reported_by, technician_id, action_taken, created_at)
                 SELECT 
                     d.id,
-                    1 AS machine_id,
+                    COALESCE(m.id, 1) AS machine_id,
                     COALESCE(dr.id, 1) AS downtime_reason_id,
                     TIMESTAMP(COALESCE(NULLIF(d.tanggal, '0000-00-00'), '2024-01-01'), '08:00:00') AS start_time,
                     TIMESTAMPADD(MINUTE, GREATEST(0, COALESCE(d.total_time, 0)), TIMESTAMP(COALESCE(NULLIF(d.tanggal, '0000-00-00'), '2024-01-01'), '08:00:00')) AS end_time,
@@ -479,13 +513,15 @@ class MigrateLegacyDataCommand extends Command
                     CONCAT('Breakdown: ', COALESCE(d.breakdown, '-'), ' | Ket: ', COALESCE(d.keterangan, '-'), ' | Area: ', COALESCE(d.area, '-'), ' MC: ', COALESCE(d.no_mc, '-')) AS action_taken,
                     COALESCE(d.created_at, NOW()) AS created_at
                 FROM capacity_system.downtime d
+                LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(d.area)), '-MC', LPAD(CAST(d.no_mc AS SIGNED), 3, '0'))
                 LEFT JOIN a_erp.downtime_reasons dr ON dr.code = d.breakdown
                 {$limitSql};
             ");
 
             // Migrasi Tiket Pengaduan
+            $this->line('  → Migrasi Tiket Pengaduan Maintenance...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.maintenance_tickets
+                INSERT INTO a_erp.maintenance_tickets
                 (id, ticket_number, machine_id, priority, issue_description, reported_by, status, created_at)
                 SELECT 
                     p.id_pengaduan AS id,
@@ -493,12 +529,14 @@ class MigrateLegacyDataCommand extends Command
                     1 AS machine_id,
                     'MEDIUM' AS priority,
                     COALESCE(p.isi, 'Laporan pemeliharaan') AS issue_description,
-                    1 AS reported_by,
+                    COALESCE(u.id, 1) AS reported_by,
                     CASE WHEN p.replied = 1 THEN 'RESOLVED' ELSE 'OPEN' END AS status,
                     COALESCE(p.created_at, NOW()) AS created_at
                 FROM capacity_system.pengaduan p
+                LEFT JOIN a_erp.users u ON u.username = p.username
                 {$limitSql};
             ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
         $downtimeCount = DB::table('machine_downtimes')->count();
@@ -515,11 +553,15 @@ class MigrateLegacyDataCommand extends Command
         $this->info('▶ [FASE 6] Memproses Saldo & Mutasi Benang Lantai (stock_area)...');
 
         if (!$isDryRun) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('yarn_stock_balances')->truncate();
+
+            $this->line('  → Migrasi Saldo Benang dengan Relasi Area Gudang/Lantai...');
             DB::statement("
-                INSERT IGNORE INTO a_erp.yarn_stock_balances
+                INSERT INTO a_erp.yarn_stock_balances
                 (factory_area_id, yarn_code, yarn_name, color_name, lot_number, qty_cones, weight_kg, created_at, updated_at)
                 SELECT 
-                    1 AS factory_area_id,
+                    COALESCE(fa.id, 1) AS factory_area_id,
                     COALESCE(NULLIF(TRIM(s.item_type), ''), 'YARN-SP') AS yarn_code,
                     COALESCE(NULLIF(TRIM(s.item_type), ''), 'Standard Yarn') AS yarn_name,
                     COALESCE(NULLIF(TRIM(s.warna), ''), 'NATURAL') AS color_name,
@@ -528,8 +570,10 @@ class MigrateLegacyDataCommand extends Command
                     GREATEST(0.000, COALESCE(ROUND(SUM(s.kgs_in_out), 3), 0.000)) AS weight_kg,
                     COALESCE(MIN(s.created_at), NOW()), NOW()
                 FROM capacity_system.stock_area s
-                GROUP BY s.item_type, s.warna, s.lot;
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(s.area))
+                GROUP BY COALESCE(fa.id, 1), s.item_type, s.warna, s.lot;
             ");
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
         $yarnCount = DB::table('yarn_stock_balances')->count();
