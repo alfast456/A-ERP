@@ -499,7 +499,17 @@ FROM `orders` o
 JOIN `order_styles` st ON st.order_id = o.id
 JOIN `order_shipments` s ON s.order_style_id = st.id
 LEFT JOIN `production_boxes` pb ON pb.order_shipment_id = s.id
-GROUP BY s.id, o.id, st.id;
+GROUP BY 
+    s.id, 
+    o.id, 
+    o.po_number, 
+    o.buyer_name, 
+    s.target_delivery_date, 
+    st.id, 
+    st.style_code, 
+    st.color_code, 
+    st.size, 
+    s.qty_pairs;
 
 -- ------------------------------------------------------------------------------
 -- 6. INITIAL SEED DATA (ESSENTIAL MASTER)
