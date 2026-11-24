@@ -330,13 +330,13 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Header Orders (PO Asli, Real Buyer & Status Akurat)...');
             DB::statement("
                 INSERT INTO a_erp.orders 
-                (po_number, buyer_name, season, order_type, total_ordered_pairs, order_date, status, created_at, updated_at)
+                (po_number, buyer_name, season, order_type, total_ordered_pcs, order_date, status, created_at, updated_at)
                 SELECT 
                     sub.po_number,
                     COALESCE(MAX(NULLIF(TRIM(dm.kd_buyer_order), '')), 'GENERAL BUYER') AS buyer_name,
                     COALESCE(MAX(NULLIF(TRIM(sub.country), '')), 'REGULAR') AS season,
                     'BULK' AS order_type,
-                    SUM(sub.qty) AS total_ordered_pairs,
+                    SUM(sub.qty) AS total_ordered_pcs,
                     MIN(sub.delivery_date) AS order_date,
                     CASE 
                         WHEN MAX(can.idapsperstyle) IS NOT NULL THEN 'CANCELLED'
@@ -405,13 +405,13 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Order Shipments (Multi-Delivery Preserved)...');
             DB::statement("
                 INSERT INTO a_erp.order_shipments 
-                (id, order_style_id, shipment_index, target_delivery_date, qty_pairs, created_at, updated_at)
+                (id, order_style_id, shipment_index, target_delivery_date, qty_pcs, created_at, updated_at)
                 SELECT 
                     a.idapsperstyle AS id,
                     s.id AS order_style_id,
                     1 AS shipment_index,
                     COALESCE(NULLIF(a.delivery, '0000-00-00'), '2026-12-31') AS target_delivery_date,
-                    COALESCE(a.qty, 0) AS qty_pairs,
+                    COALESCE(a.qty, 0) AS qty_pcs,
                     NOW(), NOW()
                 FROM capacity_system.apsperstyle a
                 JOIN a_erp.orders o ON o.po_number = COALESCE(NULLIF(TRIM(a.no_order), ''), CONCAT('PO-', a.mastermodel))
@@ -493,12 +493,12 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Alokasi Planning (detail_planning -> planning_allocations)...');
             DB::statement("
                 INSERT INTO a_erp.planning_allocations
-                (id, order_id, factory_area_id, allocated_pairs, target_start_date, target_end_date, created_at, updated_at)
+                (id, order_id, factory_area_id, allocated_pcs, target_start_date, target_end_date, created_at, updated_at)
                 SELECT 
                     dp.id_detail_pln AS id,
                     COALESCE(st.order_id, 1) AS order_id,
                     COALESCE(fa.id, 1) AS factory_area_id,
-                    COALESCE(SUM(tp.mesin * 100), 1000) AS allocated_pairs,
+                    COALESCE(SUM(tp.mesin * 100), 1000) AS allocated_pcs,
                     COALESCE(MIN(NULLIF(tp.start_mesin, '0000-00-00')), CURDATE()) AS target_start_date,
                     COALESCE(MAX(NULLIF(tp.stop_mesin, '0000-00-00')), CURDATE()) AS target_end_date,
                     NOW(), NOW()
@@ -518,7 +518,7 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Jadwal Assignment Mesin (tanggal_planning -> machine_assignments)...');
             DB::statement("
                 INSERT INTO a_erp.machine_assignments
-                (id, planning_allocation_id, machine_id, order_shipment_id, plan_date, target_dz, target_pairs, created_at, updated_at)
+                (id, planning_allocation_id, machine_id, order_shipment_id, plan_date, target_dz, target_pcs, created_at, updated_at)
                 SELECT 
                     tp.id AS id,
                     tp.id_detail_pln AS planning_allocation_id,
@@ -526,7 +526,7 @@ class MigrateLegacyDataCommand extends Command
                     COALESCE(sh.id, 1) AS order_shipment_id,
                     COALESCE(NULLIF(tp.date, '0000-00-00'), CURDATE()) AS plan_date,
                     ROUND(COALESCE(tp.mesin, 0) * 8.33, 2) AS target_dz,
-                    COALESCE(tp.mesin * 100, 0) AS target_pairs,
+                    COALESCE(tp.mesin * 100, 0) AS target_pcs,
                     NOW(), NOW()
                 FROM capacity_system.tanggal_planning tp
                 JOIN capacity_system.detail_planning dp ON dp.id_detail_pln = tp.id_detail_pln
@@ -595,8 +595,8 @@ class MigrateLegacyDataCommand extends Command
                     c.id AS id,
                     1 AS order_revision_id,
                     c.idapsperstyle AS order_shipment_id,
-                    COALESCE(s.qty_pairs, 0) + c.qty_cancel AS old_qty,
-                    COALESCE(s.qty_pairs, 0) AS new_qty,
+                    COALESCE(s.qty_pcs, 0) + c.qty_cancel AS old_qty,
+                    COALESCE(s.qty_pcs, 0) AS new_qty,
                     -CAST(c.qty_cancel AS SIGNED) AS delta_qty,
                     NOW() AS created_at
                 FROM capacity_system.data_cancel_order c
@@ -628,7 +628,7 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Box Produksi (Barcode Fisik Asli, No Box, Shift A/B/C & Area Presisi)...');
             DB::statement("
                 INSERT INTO a_erp.production_boxes 
-                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, factory_area_id, operator_id, good_pairs, defect_pairs, weight_kg, created_at)
+                (id, box_barcode, no_box, no_label, production_date, shift, shift_a, shift_b, shift_c, order_shipment_id, machine_id, factory_area_id, operator_id, good_pcs, defect_pcs, weight_kg, created_at)
                 SELECT 
                     p.id_produksi AS id,
                     COALESCE(NULLIF(TRIM(p.no_box), ''), CONCAT('BOX-', p.id_produksi)) AS box_barcode,
@@ -653,8 +653,8 @@ class MigrateLegacyDataCommand extends Command
                     COALESCE(m.id, m2.id, 1) AS machine_id,
                     fa.id AS factory_area_id,
                     COALESCE(u.id, 1) AS operator_id,
-                    COALESCE(p.qty_produksi, 0) AS good_pairs,
-                    0 AS defect_pairs,
+                    COALESCE(p.qty_produksi, 0) AS good_pcs,
+                    0 AS defect_pcs,
                     0.000 AS weight_kg,
                     COALESCE(p.created_at, NOW()) AS created_at
                 FROM capacity_system.produksi p
@@ -695,12 +695,12 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Detail Cacat Box (data_bs)...');
             DB::statement("
                 INSERT INTO a_erp.box_defects 
-                (id, production_box_id, defect_type_id, defect_count_pairs, notes, created_at)
+                (id, production_box_id, defect_type_id, defect_count_pcs, notes, created_at)
                 SELECT 
                     b.idbs AS id,
                     COALESCE(b.idapsperstyle, 1) AS production_box_id,
                     COALESCE(dt.id, 1) AS defect_type_id,
-                    COALESCE(b.qty, 1) AS defect_count_pairs,
+                    COALESCE(b.qty, 1) AS defect_count_pcs,
                     SUBSTRING(CONCAT('Legacy BS: ', COALESCE(b.kode_deffect, 'N/A'), ' | Area: ', COALESCE(b.area, 'N/A'), ' | Box: ', COALESCE(b.no_box, '-'), ' | Label: ', COALESCE(b.no_label, '-')), 1, 255) AS notes,
                     COALESCE(b.created_at, NOW()) AS created_at
                 FROM capacity_system.data_bs b
@@ -712,14 +712,14 @@ class MigrateLegacyDataCommand extends Command
             $this->line('  → Migrasi Riwayat Perbaikan (perbaikan_area)...');
             DB::statement("
                 INSERT INTO a_erp.rework_tracking 
-                (id, production_box_id, defect_type_id, sent_pairs, repaired_pairs, scrapped_pairs, status, repair_area_id, created_at)
+                (id, production_box_id, defect_type_id, sent_pcs, repaired_pcs, scrapped_pcs, status, repair_area_id, created_at)
                 SELECT 
                     r.id_perbaikan AS id,
                     COALESCE(r.idapsperstyle, 1) AS production_box_id,
                     COALESCE(dt.id, 1) AS defect_type_id,
-                    COALESCE(r.qty, 1) AS sent_pairs,
-                    CASE WHEN r.out_pb = '1' THEN COALESCE(r.qty, 1) ELSE 0 END AS repaired_pairs,
-                    0 AS scrapped_pairs,
+                    COALESCE(r.qty, 1) AS sent_pcs,
+                    CASE WHEN r.out_pb = '1' THEN COALESCE(r.qty, 1) ELSE 0 END AS repaired_pcs,
+                    0 AS scrapped_pcs,
                     CASE WHEN r.out_pb = '1' THEN 'RESOLVED' ELSE 'IN_REPAIR' END AS status,
                     COALESCE(fa.id, 1) AS repair_area_id,
                     COALESCE(r.created_at, NOW()) AS created_at

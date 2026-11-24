@@ -18,9 +18,9 @@ class ReworkTracking extends Model
     protected $fillable = [
         'production_box_id',
         'defect_type_id',
-        'sent_pairs',
-        'repaired_pairs',
-        'scrapped_pairs',
+        'sent_pcs',
+        'repaired_pcs',
+        'scrapped_pcs',
         'status',
         'repair_area_id',
         'technician_id',
@@ -31,13 +31,28 @@ class ReworkTracking extends Model
     protected function casts(): array
     {
         return [
-            'sent_pairs' => 'integer',
-            'repaired_pairs' => 'integer',
-            'scrapped_pairs' => 'integer',
+            'sent_pcs' => 'integer',
+            'repaired_pcs' => 'integer',
+            'scrapped_pcs' => 'integer',
             'status' => ReworkStatus::class,
             'repaired_at' => 'datetime',
             'created_at' => 'datetime',
         ];
+    }
+
+    public function getSentPairsAttribute(): int
+    {
+        return $this->sent_pcs;
+    }
+
+    public function getRepairedPairsAttribute(): int
+    {
+        return $this->repaired_pcs;
+    }
+
+    public function getScrappedPairsAttribute(): int
+    {
+        return $this->scrapped_pcs;
     }
 
     public function productionBox(): BelongsTo

@@ -27,10 +27,12 @@ class DashboardController extends Controller
         $totalMachines = Machine::count();
         $breakdownMachines = Machine::where('status', MachineStatus::BREAKDOWN)->count();
 
-        $todayGoodPairs = (int) ProductionBox::where('production_date', $today)->sum('good_pairs');
-        $todayDefectPairs = (int) ProductionBox::where('production_date', $today)->sum('defect_pairs');
-        $totalOutput = $todayGoodPairs + $todayDefectPairs;
-        $defectRate = $totalOutput > 0 ? round(($todayDefectPairs / $totalOutput) * 100, 2) : 0.0;
+        $todayGoodPcs = (int) ProductionBox::where('production_date', $today)->sum('good_pcs');
+        $todayDefectPcs = (int) ProductionBox::where('production_date', $today)->sum('defect_pcs');
+        $todayGoodPairs = $todayGoodPcs;
+        $todayDefectPairs = $todayDefectPcs;
+        $totalOutput = $todayGoodPcs + $todayDefectPcs;
+        $defectRate = $totalOutput > 0 ? round(($todayDefectPcs / $totalOutput) * 100, 2) : 0.0;
 
         // Domain Metrics from CapacityApps integration
         $totalDefectsCount = BoxDefect::count();
@@ -62,11 +64,12 @@ class DashboardController extends Controller
                 st.style_code,
                 st.color_code,
                 st.size,
-                s.qty_pairs AS ordered_qty,
-                COALESCE(SUM(pb.good_pairs), 0) AS produced_good_qty,
-                COALESCE(SUM(pb.defect_pairs), 0) AS produced_defect_qty,
-                GREATEST(0, CAST(s.qty_pairs AS SIGNED) - CAST(COALESCE(SUM(pb.good_pairs), 0) AS SIGNED)) AS sisa_pairs,
-                ROUND((COALESCE(SUM(pb.good_pairs), 0) / NULLIF(s.qty_pairs, 0)) * 100, 2) AS completion_percentage
+                s.qty_pcs AS ordered_qty,
+                COALESCE(SUM(pb.good_pcs), 0) AS produced_good_qty,
+                COALESCE(SUM(pb.defect_pcs), 0) AS produced_defect_qty,
+                GREATEST(0, CAST(s.qty_pcs AS SIGNED) - CAST(COALESCE(SUM(pb.good_pcs), 0) AS SIGNED)) AS sisa_pcs,
+                GREATEST(0, CAST(s.qty_pcs AS SIGNED) - CAST(COALESCE(SUM(pb.good_pcs), 0) AS SIGNED)) AS sisa_pairs,
+                ROUND((COALESCE(SUM(pb.good_pcs), 0) / NULLIF(s.qty_pcs, 0)) * 100, 2) AS completion_percentage
             ')
             ->groupBy(
                 's.id',
@@ -78,7 +81,7 @@ class DashboardController extends Controller
                 'st.style_code',
                 'st.color_code',
                 'st.size',
-                's.qty_pairs'
+                's.qty_pcs'
             )
             ->orderBy('s.target_delivery_date')
             ->get();
@@ -88,6 +91,8 @@ class DashboardController extends Controller
             'runningMachines',
             'totalMachines',
             'breakdownMachines',
+            'todayGoodPcs',
+            'todayDefectPcs',
             'todayGoodPairs',
             'todayDefectPairs',
             'defectRate',

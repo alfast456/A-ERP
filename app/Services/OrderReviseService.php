@@ -47,11 +47,11 @@ class OrderReviseService
                     ->lockForUpdate()
                     ->firstOrFail();
 
-                $oldQty = $shipment->qty_pairs;
+                $oldQty = $shipment->qty_pcs;
                 $newQty = (int) $item['new_qty'];
 
                 // Proteksi Mutlak: Zero Production Loss
-                $producedGood = $shipment->produced_good_pairs;
+                $producedGood = $shipment->produced_good_pcs;
                 if ($newQty < $producedGood) {
                     throw new ZeroProductionLossException($shipment->id, $producedGood, $newQty);
                 }
@@ -68,7 +68,7 @@ class OrderReviseService
                         'created_at' => now(),
                     ]);
 
-                    $updatePayload = ['qty_pairs' => $newQty];
+                    $updatePayload = ['qty_pcs' => $newQty];
                     if (! empty($item['new_delivery_date'])) {
                         $updatePayload['target_delivery_date'] = $item['new_delivery_date'];
                     }
@@ -77,12 +77,12 @@ class OrderReviseService
                 }
             }
 
-            // Rekalkulasi total order pairs
-            $totalPairs = (int) OrderShipment::whereHas('orderStyle', function ($query) use ($order) {
+            // Rekalkulasi total order pcs
+            $totalPcs = (int) OrderShipment::whereHas('orderStyle', function ($query) use ($order) {
                 $query->where('order_id', $order->id);
-            })->sum('qty_pairs');
+            })->sum('qty_pcs');
 
-            $order->update(['total_ordered_pairs' => $totalPairs]);
+            $order->update(['total_ordered_pcs' => $totalPcs]);
 
             return $revision->load('items');
         });

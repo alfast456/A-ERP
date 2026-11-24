@@ -15,8 +15,8 @@ class MonthlyTarget extends Model
     protected $fillable = [
         'plant_id',
         'target_month',
-        'target_export_pairs',
-        'target_local_pairs',
+        'target_export_pcs',
+        'target_local_pcs',
         'target_efficiency',
         'created_at',
     ];
@@ -24,11 +24,21 @@ class MonthlyTarget extends Model
     protected function casts(): array
     {
         return [
-            'target_export_pairs' => 'integer',
-            'target_local_pairs' => 'integer',
+            'target_export_pcs' => 'integer',
+            'target_local_pcs' => 'integer',
             'target_efficiency' => 'decimal:2',
             'created_at' => 'datetime',
         ];
+    }
+
+    public function getTargetExportPairsAttribute(): int
+    {
+        return $this->target_export_pcs;
+    }
+
+    public function getTargetLocalPairsAttribute(): int
+    {
+        return $this->target_local_pcs;
     }
 
     public function plant(): BelongsTo

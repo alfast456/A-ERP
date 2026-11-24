@@ -48,8 +48,8 @@ class QualityController extends Controller
 
         $totalDefectsCount = BoxDefect::count();
         $totalReworkCount = ReworkTracking::count();
-        $totalRepaired = (int) ReworkTracking::where('status', ReworkStatus::RESOLVED)->sum('repaired_pairs');
-        $totalScrapped = (int) ReworkTracking::where('status', ReworkStatus::SCRAPPED)->sum('scrapped_pairs');
+        $totalRepaired = (int) ReworkTracking::where('status', ReworkStatus::RESOLVED)->sum('repaired_pcs');
+        $totalScrapped = (int) ReworkTracking::where('status', ReworkStatus::SCRAPPED)->sum('scrapped_pcs');
         $inRepairCount = ReworkTracking::where('status', ReworkStatus::IN_REPAIR)->count();
 
         $repairResolutionRate = ($totalRepaired + $totalScrapped) > 0

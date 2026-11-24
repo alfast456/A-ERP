@@ -15,7 +15,7 @@ class OrderShipment extends Model
         'order_style_id',
         'shipment_index',
         'target_delivery_date',
-        'qty_pairs',
+        'qty_pcs',
     ];
 
     protected function casts(): array
@@ -23,7 +23,7 @@ class OrderShipment extends Model
         return [
             'shipment_index' => 'integer',
             'target_delivery_date' => 'date',
-            'qty_pairs' => 'integer',
+            'qty_pcs' => 'integer',
         ];
     }
 
@@ -48,27 +48,50 @@ class OrderShipment extends Model
     }
 
     /**
-     * Dynamic calculation of produced good pairs
+     * Backward-compatibility accessor for qty_pairs
      */
+    public function getQtyPairsAttribute(): int
+    {
+        return $this->qty_pcs;
+    }
+
+    /**
+     * Dynamic calculation of produced good pcs
+     */
+    public function getProducedGoodPcsAttribute(): int
+    {
+        return (int) $this->productionBoxes()->sum('good_pcs');
+    }
+
     public function getProducedGoodPairsAttribute(): int
     {
-        return (int) $this->productionBoxes()->sum('good_pairs');
+        return $this->produced_good_pcs;
     }
 
     /**
-     * Dynamic calculation of produced defect pairs
+     * Dynamic calculation of produced defect pcs
      */
+    public function getProducedDefectPcsAttribute(): int
+    {
+        return (int) $this->productionBoxes()->sum('defect_pcs');
+    }
+
     public function getProducedDefectPairsAttribute(): int
     {
-        return (int) $this->productionBoxes()->sum('defect_pairs');
+        return $this->produced_defect_pcs;
     }
 
     /**
-     * Dynamic calculation of sisa order (eliminating god-mode static update)
+     * Dynamic calculation of sisa order in pcs
      */
+    public function getSisaPcsAttribute(): int
+    {
+        return max(0, $this->qty_pcs - $this->produced_good_pcs);
+    }
+
     public function getSisaPairsAttribute(): int
     {
-        return max(0, $this->qty_pairs - $this->produced_good_pairs);
+        return $this->sisa_pcs;
     }
 
     /**
@@ -76,10 +99,10 @@ class OrderShipment extends Model
      */
     public function getCompletionPercentageAttribute(): float
     {
-        if ($this->qty_pairs <= 0) {
+        if ($this->qty_pcs <= 0) {
             return 0.0;
         }
 
-        return round(($this->produced_good_pairs / $this->qty_pairs) * 100, 2);
+        return round(($this->produced_good_pcs / $this->qty_pcs) * 100, 2);
     }
 }

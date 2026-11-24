@@ -15,7 +15,7 @@ class BoxDefect extends Model
     protected $fillable = [
         'production_box_id',
         'defect_type_id',
-        'defect_count_pairs',
+        'defect_count_pcs',
         'notes',
         'created_at',
     ];
@@ -23,9 +23,14 @@ class BoxDefect extends Model
     protected function casts(): array
     {
         return [
-            'defect_count_pairs' => 'integer',
+            'defect_count_pcs' => 'integer',
             'created_at' => 'datetime',
         ];
+    }
+
+    public function getDefectCountPairsAttribute(): int
+    {
+        return $this->defect_count_pcs;
     }
 
     public function productionBox(): BelongsTo

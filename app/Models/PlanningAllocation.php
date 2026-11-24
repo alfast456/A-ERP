@@ -14,7 +14,7 @@ class PlanningAllocation extends Model
     protected $fillable = [
         'order_id',
         'factory_area_id',
-        'allocated_pairs',
+        'allocated_pcs',
         'target_start_date',
         'target_end_date',
     ];
@@ -22,10 +22,15 @@ class PlanningAllocation extends Model
     protected function casts(): array
     {
         return [
-            'allocated_pairs' => 'integer',
+            'allocated_pcs' => 'integer',
             'target_start_date' => 'date',
             'target_end_date' => 'date',
         ];
+    }
+
+    public function getAllocatedPairsAttribute(): int
+    {
+        return $this->allocated_pcs;
     }
 
     public function order(): BelongsTo

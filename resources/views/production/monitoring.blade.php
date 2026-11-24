@@ -16,19 +16,19 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Kuantitas Order</span>
-            <span class="text-2xl font-black text-slate-900 mt-2 block">{{ number_format($totalOrdered) }} <span class="text-xs font-normal text-slate-500">Pasang</span></span>
+            <span class="text-2xl font-black text-slate-900 mt-2 block">{{ number_format($totalOrdered) }} <span class="text-xs font-normal text-slate-500">Pcs</span></span>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Good Pairs (Lolos)</span>
-            <span class="text-2xl font-black text-emerald-600 mt-2 block">{{ number_format($totalGood) }} <span class="text-xs font-normal text-slate-500">Pasang</span></span>
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Good Pcs (Lolos)</span>
+            <span class="text-2xl font-black text-emerald-600 mt-2 block">{{ number_format($totalGood) }} <span class="text-xs font-normal text-slate-500">Pcs</span></span>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Cacat (BS/Reject)</span>
-            <span class="text-2xl font-black text-rose-600 mt-2 block">{{ number_format($totalDefect) }} <span class="text-xs font-normal text-slate-500">Pasang</span></span>
+            <span class="text-2xl font-black text-rose-600 mt-2 block">{{ number_format($totalDefect) }} <span class="text-xs font-normal text-slate-500">Pcs</span></span>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Total Sisa Harus Dirajut</span>
-            <span class="text-2xl font-black text-amber-600 mt-2 block">{{ number_format($totalSisa) }} <span class="text-xs font-normal text-slate-500">Pasang</span></span>
+            <span class="text-2xl font-black text-amber-600 mt-2 block">{{ number_format($totalSisa) }} <span class="text-xs font-normal text-slate-500">Pcs</span></span>
         </div>
     </div>
 
@@ -65,7 +65,7 @@
                         <th class="px-6 py-3 text-right">Order Qty</th>
                         <th class="px-6 py-3 text-right">Good Qty</th>
                         <th class="px-6 py-3 text-right">BS Qty</th>
-                        <th class="px-6 py-3 text-right">Sisa Pairs</th>
+                        <th class="px-6 py-3 text-right">Sisa Pcs</th>
                         <th class="px-6 py-3">Progres Produksi</th>
                     </tr>
                 </thead>
@@ -82,14 +82,14 @@
                             <td class="px-6 py-4 text-right font-semibold">{{ number_format($row->ordered_qty) }}</td>
                             <td class="px-6 py-4 text-right font-semibold text-emerald-600">{{ number_format($row->produced_good_qty) }}</td>
                             <td class="px-6 py-4 text-right text-rose-600 text-xs">{{ number_format($row->produced_defect_qty) }}</td>
-                            <td class="px-6 py-4 text-right font-black {{ $row->sisa_pairs == 0 ? 'text-slate-400' : 'text-amber-600' }}">
-                                {{ number_format($row->sisa_pairs) }}
+                            <td class="px-6 py-4 text-right font-black {{ $row->sisa_pcs == 0 ? 'text-slate-400' : 'text-amber-600' }}">
+                                {{ number_format($row->sisa_pcs) }}
                             </td>
                             <td class="px-6 py-4">
                                 <div class="w-40">
                                     <div class="flex justify-between text-xs font-semibold mb-1">
                                         <span class="{{ $row->completion_percentage >= 100 ? 'text-emerald-600' : 'text-slate-700' }}">{{ $row->completion_percentage }}%</span>
-                                        @if($row->sisa_pairs == 0)
+                                        @if($row->sisa_pcs == 0)
                                             <span class="text-emerald-600 text-[10px]">LENGKAP</span>
                                         @endif
                                     </div>

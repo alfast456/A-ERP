@@ -22,7 +22,7 @@ class UserInterfaceRoutesTest extends TestCase
             'buyer_name' => 'NIKE EUROPE',
             'season' => 'SP26',
             'order_type' => OrderType::BULK,
-            'total_ordered_pairs' => 1200,
+            'total_ordered_pcs' => 1200,
             'order_date' => '2099-12-31',
             'status' => OrderStatus::IN_PRODUCTION,
         ]);
@@ -39,7 +39,7 @@ class UserInterfaceRoutesTest extends TestCase
             'order_style_id' => $style->id,
             'shipment_index' => 1,
             'target_delivery_date' => now()->addDays(14)->toDateString(),
-            'qty_pairs' => 1200,
+            'qty_pcs' => 1200,
         ]);
 
         return $order;
@@ -95,6 +95,7 @@ class UserInterfaceRoutesTest extends TestCase
         $response->assertSessionHas('success');
 
         $shipment->refresh();
+        $this->assertEquals(1500, $shipment->qty_pcs);
         $this->assertEquals(1500, $shipment->qty_pairs);
     }
 

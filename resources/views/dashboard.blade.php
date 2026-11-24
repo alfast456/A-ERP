@@ -46,8 +46,8 @@
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Output Bagus (Hari Ini)</span>
             <div class="mt-2 flex items-baseline justify-between">
-                <span class="text-3xl font-extrabold text-blue-600">{{ number_format($todayGoodPairs) }}</span>
-                <span class="text-xs font-medium text-slate-500">Pasang</span>
+                <span class="text-3xl font-extrabold text-blue-600">{{ number_format($todayGoodPcs ?? $todayGoodPairs) }}</span>
+                <span class="text-xs font-medium text-slate-500">Pcs</span>
             </div>
             <p class="text-xs text-slate-500 mt-2">1,895 juta total box tercatat</p>
         </div>
@@ -57,7 +57,7 @@
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Defect Rate (BS)</span>
             <div class="mt-2 flex items-baseline justify-between">
                 <span class="text-3xl font-extrabold {{ $defectRate > 3.0 ? 'text-rose-600' : 'text-slate-900' }}">{{ $defectRate }}%</span>
-                <span class="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{{ number_format($todayDefectPairs) }} pasang BS</span>
+                <span class="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{{ number_format($todayDefectPcs ?? $todayDefectPairs) }} pcs BS</span>
             </div>
             <p class="text-xs text-slate-500 mt-2">Target standar &lt; 3.0%</p>
         </div>
@@ -154,8 +154,8 @@
                             <td class="py-3 px-4 text-right font-mono font-semibold text-blue-600">
                                 {{ number_format($item->produced_good_qty) }}
                             </td>
-                            <td class="py-3 px-4 text-right font-mono font-bold {{ $item->sisa_pairs > 0 ? 'text-amber-600' : 'text-emerald-600' }}">
-                                {{ number_format($item->sisa_pairs) }}
+                            <td class="py-3 px-4 text-right font-mono font-bold {{ $item->sisa_pcs > 0 ? 'text-amber-600' : 'text-emerald-600' }}">
+                                {{ number_format($item->sisa_pcs) }}
                             </td>
                             <td class="py-3 px-4">
                                 @php
@@ -200,8 +200,8 @@
                     </div>
                     <div class="flex items-center space-x-4">
                         <div class="text-right">
-                            <span class="text-xs text-slate-400 block">Total Pasang</span>
-                            <span class="font-bold font-mono text-slate-900">{{ number_format($order->total_ordered_pairs) }}</span>
+                            <span class="text-xs text-slate-400 block">Total Pcs</span>
+                            <span class="font-bold font-mono text-slate-900">{{ number_format($order->total_ordered_pcs) }}</span>
                         </div>
                         <a href="{{ route('orders.show', $order) }}" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition">
                             Detail PDK →

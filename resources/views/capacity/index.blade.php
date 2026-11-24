@@ -34,7 +34,7 @@
             <span class="text-xs font-medium text-slate-500 uppercase tracking-wider block">Kapasitas Harian / Mesin</span>
             <div class="mt-2 flex items-baseline justify-between">
                 <span class="text-2xl font-extrabold text-emerald-600">{{ number_format($dailyCapacityPerMachine, 0) }}</span>
-                <span class="text-xs text-slate-400">pairs/hari</span>
+                <span class="text-xs text-slate-400">pcs/hari</span>
             </div>
             <span class="text-2xs text-slate-400 block mt-2">Asumsi SMV rata-rata: 140 detik</span>
         </div>
@@ -43,7 +43,7 @@
             <span class="text-xs font-medium text-slate-500 uppercase tracking-wider block">Throughput Total Pabrik</span>
             <div class="mt-2 flex items-baseline justify-between">
                 <span class="text-2xl font-extrabold text-indigo-600">{{ number_format($totalDailyPlantOutput, 0) }}</span>
-                <span class="text-xs text-slate-400">pairs/hari</span>
+                <span class="text-xs text-slate-400">pcs/hari</span>
             </div>
             <span class="text-2xs text-slate-400 block mt-2">Total potensi output serentak</span>
         </div>
@@ -54,7 +54,7 @@
                 <span class="text-2xl font-extrabold text-amber-600">{{ $estimatedDaysToComplete }}</span>
                 <span class="text-xs text-slate-400">hari kerja</span>
             </div>
-            <span class="text-2xs text-slate-400 block mt-2">Untuk {{ number_format($totalOrderedPairs) }} total pasang order</span>
+            <span class="text-2xs text-slate-400 block mt-2">Untuk {{ number_format($totalOrderedPcs) }} total pcs order</span>
         </div>
     </div>
 
@@ -100,7 +100,7 @@
                         <th class="py-3 px-4">Nomor PO</th>
                         <th class="py-3 px-4">Buyer</th>
                         <th class="py-3 px-4">Tanggal Order</th>
-                        <th class="py-3 px-4 text-right">Total Pasang</th>
+                        <th class="py-3 px-4 text-right">Total Pcs</th>
                         <th class="py-3 px-4 text-center">Status</th>
                     </tr>
                 </thead>
@@ -119,7 +119,7 @@
                                 {{ $ord->order_date?->format('d M Y') ?? '-' }}
                             </td>
                             <td class="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                                {{ number_format($ord->total_ordered_pairs) }}
+                                {{ number_format($ord->total_ordered_pcs) }}
                             </td>
                             <td class="py-3 px-4 text-center">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800">

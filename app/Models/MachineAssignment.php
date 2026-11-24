@@ -16,7 +16,7 @@ class MachineAssignment extends Model
         'order_shipment_id',
         'plan_date',
         'target_dz',
-        'target_pairs',
+        'target_pcs',
     ];
 
     protected function casts(): array
@@ -24,8 +24,13 @@ class MachineAssignment extends Model
         return [
             'plan_date' => 'date',
             'target_dz' => 'decimal:2',
-            'target_pairs' => 'integer',
+            'target_pcs' => 'integer',
         ];
+    }
+
+    public function getTargetPairsAttribute(): int
+    {
+        return $this->target_pcs;
     }
 
     public function planningAllocation(): BelongsTo

@@ -17,7 +17,7 @@ class Order extends Model
         'buyer_name',
         'season',
         'order_type',
-        'total_ordered_pairs',
+        'total_ordered_pcs',
         'order_date',
         'status',
     ];
@@ -28,8 +28,13 @@ class Order extends Model
             'order_date' => 'date',
             'order_type' => OrderType::class,
             'status' => OrderStatus::class,
-            'total_ordered_pairs' => 'integer',
+            'total_ordered_pcs' => 'integer',
         ];
+    }
+
+    public function getTotalOrderedPairsAttribute(): int
+    {
+        return $this->total_ordered_pcs;
     }
 
     public function orderStyles(): HasMany

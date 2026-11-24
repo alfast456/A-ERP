@@ -17,7 +17,7 @@ class OrderBooking extends Model
         'buyer_name',
         'booking_code',
         'machine_type_id',
-        'estimated_pairs',
+        'estimated_pcs',
         'target_month',
         'notes',
         'status',
@@ -27,10 +27,15 @@ class OrderBooking extends Model
     protected function casts(): array
     {
         return [
-            'estimated_pairs' => 'integer',
+            'estimated_pcs' => 'integer',
             'status' => BookingStatus::class,
             'created_at' => 'datetime',
         ];
+    }
+
+    public function getEstimatedPairsAttribute(): int
+    {
+        return $this->estimated_pcs;
     }
 
     public function machineType(): BelongsTo

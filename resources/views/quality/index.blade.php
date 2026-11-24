@@ -39,7 +39,7 @@
             <span class="text-xs font-medium text-slate-500 uppercase tracking-wider block">Sukses Diperbaiki (Repaired)</span>
             <div class="mt-2 flex items-baseline justify-between">
                 <span class="text-2xl font-extrabold text-emerald-600 tracking-tight">{{ number_format($totalRepaired) }}</span>
-                <span class="text-xs text-slate-400">pairs</span>
+                <span class="text-xs text-slate-400">pcs</span>
             </div>
         </div>
 
@@ -47,7 +47,7 @@
             <span class="text-xs font-medium text-slate-500 uppercase tracking-wider block">BS Murni (Scrapped)</span>
             <div class="mt-2 flex items-baseline justify-between">
                 <span class="text-2xl font-extrabold text-slate-600 tracking-tight">{{ number_format($totalScrapped) }}</span>
-                <span class="text-xs text-slate-400">pairs</span>
+                <span class="text-xs text-slate-400">pcs</span>
             </div>
         </div>
     </div>
@@ -100,7 +100,7 @@
                             <th class="py-3 px-4">ID Cacat</th>
                             <th class="py-3 px-4">Ref Box Produksi</th>
                             <th class="py-3 px-4">Kode & Deskripsi Cacat</th>
-                            <th class="py-3 px-4 text-right">Jumlah (Pairs)</th>
+                            <th class="py-3 px-4 text-right">Jumlah (Pcs)</th>
                             <th class="py-3 px-4">Catatan Audit</th>
                             <th class="py-3 px-4">Waktu Terdata</th>
                         </tr>
@@ -121,7 +121,7 @@
                                     <span class="text-xs text-slate-500 block mt-0.5">{{ $df->defectType?->description ?? '-' }}</span>
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono font-bold text-rose-600">
-                                    {{ number_format($df->defect_count_pairs) }}
+                                    {{ number_format($df->defect_count_pcs) }}
                                 </td>
                                 <td class="py-3 px-4 text-slate-600 text-xs">
                                     {{ $df->notes ?: '-' }}
@@ -206,13 +206,13 @@
                                     {{ $rw->defectType?->defect_code ?? '-' }}
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono text-slate-900">
-                                    {{ number_format($rw->sent_pairs) }}
+                                    {{ number_format($rw->sent_pcs) }}
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono font-bold text-emerald-600">
-                                    {{ number_format($rw->repaired_pairs) }}
+                                    {{ number_format($rw->repaired_pcs) }}
                                 </td>
                                 <td class="py-3 px-4 text-right font-mono font-bold text-rose-600">
-                                    {{ number_format($rw->scrapped_pairs) }}
+                                    {{ number_format($rw->scrapped_pcs) }}
                                 </td>
                                 <td class="py-3 px-4 text-center">
                                     @if($rw->status->value === 'RESOLVED')

@@ -18,8 +18,8 @@ class WipMovement extends Model
         'production_box_id',
         'from_area_id',
         'to_area_id',
-        'sent_pairs',
-        'received_pairs',
+        'sent_pcs',
+        'received_pcs',
         'dispatched_by',
         'received_by',
         'status',
@@ -31,11 +31,21 @@ class WipMovement extends Model
     {
         return [
             'movement_date' => 'date',
-            'sent_pairs' => 'integer',
-            'received_pairs' => 'integer',
+            'sent_pcs' => 'integer',
+            'received_pcs' => 'integer',
             'status' => WipStatus::class,
             'created_at' => 'datetime',
         ];
+    }
+
+    public function getSentPairsAttribute(): int
+    {
+        return $this->sent_pcs;
+    }
+
+    public function getReceivedPairsAttribute(): int
+    {
+        return $this->received_pcs;
     }
 
     public function productionBox(): BelongsTo

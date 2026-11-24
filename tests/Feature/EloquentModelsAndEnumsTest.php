@@ -45,12 +45,14 @@ class EloquentModelsAndEnumsTest extends TestCase
             'buyer_name' => 'NIKE GLOBAL',
             'season' => 'FA26',
             'order_type' => OrderType::BULK,
-            'total_ordered_pairs' => 1000,
+            'total_ordered_pcs' => 1000,
             'order_date' => now()->toDateString(),
             'status' => OrderStatus::IN_PRODUCTION,
         ]);
 
         $this->assertEquals(OrderStatus::IN_PRODUCTION, $order->status);
+        $this->assertEquals(1000, $order->total_ordered_pcs);
+        $this->assertEquals(1000, $order->total_ordered_pairs);
 
         // 2. Buat OrderStyle
         $style = OrderStyle::create([
@@ -64,20 +66,22 @@ class EloquentModelsAndEnumsTest extends TestCase
             'gw_dz' => 540.00,
         ]);
 
-        // 3. Buat Shipment (Order 1.000 pasang)
+        // 3. Buat Shipment (Order 1.000 pcs)
         $shipment = OrderShipment::create([
             'order_style_id' => $style->id,
             'shipment_index' => 1,
             'target_delivery_date' => now()->addDays(14)->toDateString(),
-            'qty_pairs' => 1000,
+            'qty_pcs' => 1000,
         ]);
 
         // Awalnya sisa harus 1.000 dan completion 0%
+        $this->assertEquals(0, $shipment->produced_good_pcs);
         $this->assertEquals(0, $shipment->produced_good_pairs);
+        $this->assertEquals(1000, $shipment->sisa_pcs);
         $this->assertEquals(1000, $shipment->sisa_pairs);
         $this->assertEquals(0.0, $shipment->completion_percentage);
 
-        // 4. Input Output Box 1: 400 pasang bagus, 10 defect
+        // 4. Input Output Box 1: 400 pcs bagus, 10 defect
         ProductionBox::create([
             'box_barcode' => 'BOX-TEST-001',
             'production_date' => now()->toDateString(),
@@ -85,18 +89,21 @@ class EloquentModelsAndEnumsTest extends TestCase
             'order_shipment_id' => $shipment->id,
             'machine_id' => $machine->id,
             'operator_id' => $user->id,
-            'good_pairs' => 400,
-            'defect_pairs' => 10,
+            'good_pcs' => 400,
+            'defect_pcs' => 10,
             'weight_kg' => 18.200,
         ]);
 
         // Sisa sekarang harus 600, completion 40%
+        $this->assertEquals(400, $shipment->produced_good_pcs);
         $this->assertEquals(400, $shipment->produced_good_pairs);
+        $this->assertEquals(10, $shipment->produced_defect_pcs);
         $this->assertEquals(10, $shipment->produced_defect_pairs);
+        $this->assertEquals(600, $shipment->sisa_pcs);
         $this->assertEquals(600, $shipment->sisa_pairs);
         $this->assertEquals(40.0, $shipment->completion_percentage);
 
-        // 5. Input Output Box 2: 600 pasang bagus
+        // 5. Input Output Box 2: 600 pcs bagus
         ProductionBox::create([
             'box_barcode' => 'BOX-TEST-002',
             'production_date' => now()->toDateString(),
@@ -104,13 +111,15 @@ class EloquentModelsAndEnumsTest extends TestCase
             'order_shipment_id' => $shipment->id,
             'machine_id' => $machine->id,
             'operator_id' => $user->id,
-            'good_pairs' => 600,
-            'defect_pairs' => 5,
+            'good_pcs' => 600,
+            'defect_pcs' => 5,
             'weight_kg' => 27.150,
         ]);
 
         // Sisa sekarang harus 0 dan completion 100%
+        $this->assertEquals(1000, $shipment->produced_good_pcs);
         $this->assertEquals(1000, $shipment->produced_good_pairs);
+        $this->assertEquals(0, $shipment->sisa_pcs);
         $this->assertEquals(0, $shipment->sisa_pairs);
         $this->assertEquals(100.0, $shipment->completion_percentage);
     }

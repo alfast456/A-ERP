@@ -57,7 +57,7 @@ class CoreServicesTest extends TestCase
             'order_style_id' => $style->id,
             'shipment_index' => 1,
             'target_delivery_date' => now()->addDays(7)->toDateString(),
-            'qty_pairs' => 1000,
+            'qty_pcs' => 1000,
         ]);
     }
 
@@ -65,7 +65,7 @@ class CoreServicesTest extends TestCase
     {
         $service = new CapacityPlanningService;
 
-        // Target: 100.000 pasang, SMV: 120 detik, 25 hari kerja, 24 jam/hari, 85% efisiensi
+        // Target: 100.000 pcs, SMV: 120 detik, 25 hari kerja, 24 jam/hari, 85% efisiensi
         // 100.000 * 120 = 12.000.000 detik kebutuhan
         // 1 mesin = 25 * 24 * 3600 * 0.85 = 1.836.000 detik kapasitas
         // Kebutuhan = ceil(12.000.000 / 1.836.000) = 7 unit mesin
@@ -90,22 +90,24 @@ class CoreServicesTest extends TestCase
             'operator_id' => $user->id,
             'production_date' => now()->toDateString(),
             'shift' => 1,
-            'good_pairs' => 300,
-            'defect_pairs' => 8,
+            'good_pcs' => 300,
+            'defect_pcs' => 8,
             'weight_kg' => 12.500,
         ], [
             [
                 'defect_type_id' => $defectType->id,
-                'defect_count_pairs' => 8,
+                'defect_count_pcs' => 8,
                 'notes' => 'Lubang pada ujung tumit',
             ],
         ]);
 
         $this->assertNotNull($box->id);
         $this->assertStringStartsWith('BOX-', $box->box_barcode);
-        $this->assertEquals(300, $box->good_pairs);
+        $this->assertEquals(300, $box->good_pcs);
+        $this->assertEquals(300, $box->good_pairs); // backward-compatible alias
         $this->assertCount(1, $box->defects);
-        $this->assertEquals(8, $box->defects->first()->defect_count_pairs);
+        $this->assertEquals(8, $box->defects->first()->defect_count_pcs);
+        $this->assertEquals(8, $box->defects->first()->defect_count_pairs); // backward-compatible alias
     }
 
     public function test_order_revise_service_increases_quantity_and_creates_revision_item(): void
@@ -118,7 +120,7 @@ class CoreServicesTest extends TestCase
             'buyer_name' => 'ADIDAS',
             'season' => 'SP26',
             'order_type' => OrderType::BULK,
-            'total_ordered_pairs' => 500,
+            'total_ordered_pcs' => 500,
             'order_date' => now()->toDateString(),
             'status' => OrderStatus::CONFIRMED,
         ]);
@@ -135,7 +137,7 @@ class CoreServicesTest extends TestCase
             'order_style_id' => $style->id,
             'shipment_index' => 1,
             'target_delivery_date' => now()->addDays(20)->toDateString(),
-            'qty_pairs' => 500,
+            'qty_pcs' => 500,
         ]);
 
         // Revisi kenaikan dari 500 -> 750
@@ -155,10 +157,12 @@ class CoreServicesTest extends TestCase
         $this->assertEquals(250, $revItem->delta_qty);
 
         $shipment->refresh();
-        $this->assertEquals(750, $shipment->qty_pairs);
+        $this->assertEquals(750, $shipment->qty_pcs);
+        $this->assertEquals(750, $shipment->qty_pairs); // backward-compatible alias
 
         $order->refresh();
-        $this->assertEquals(750, $order->total_ordered_pairs);
+        $this->assertEquals(750, $order->total_ordered_pcs);
+        $this->assertEquals(750, $order->total_ordered_pairs); // backward-compatible alias
     }
 
     public function test_order_revise_service_zero_production_loss_protection(): void
@@ -172,7 +176,7 @@ class CoreServicesTest extends TestCase
             'buyer_name' => 'PUMA',
             'season' => 'SP26',
             'order_type' => OrderType::BULK,
-            'total_ordered_pairs' => 1000,
+            'total_ordered_pcs' => 1000,
             'order_date' => now()->toDateString(),
             'status' => OrderStatus::IN_PRODUCTION,
         ]);
@@ -189,10 +193,10 @@ class CoreServicesTest extends TestCase
             'order_style_id' => $style->id,
             'shipment_index' => 1,
             'target_delivery_date' => now()->addDays(10)->toDateString(),
-            'qty_pairs' => 1000,
+            'qty_pcs' => 1000,
         ]);
 
-        // Mesin sudah merajut 600 pasang
+        // Mesin sudah merajut 600 pcs
         ProductionBox::create([
             'box_barcode' => 'BOX-PUMA-'.uniqid(),
             'production_date' => now()->toDateString(),
@@ -200,8 +204,8 @@ class CoreServicesTest extends TestCase
             'order_shipment_id' => $shipment->id,
             'machine_id' => $machine->id,
             'operator_id' => $user->id,
-            'good_pairs' => 600,
-            'defect_pairs' => 0,
+            'good_pcs' => 600,
+            'defect_pcs' => 0,
             'weight_kg' => 25.000,
         ]);
 

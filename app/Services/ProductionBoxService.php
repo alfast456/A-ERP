@@ -23,13 +23,16 @@ class ProductionBoxService
     /**
      * Mencatat transaksi output box rajut dan rincian cacat secara atomik.
      *
-     * @param  array  $payload  ['order_shipment_id', 'machine_id', 'operator_id', 'production_date', 'shift', 'good_pairs', 'defect_pairs', 'weight_kg', 'box_barcode'?]
-     * @param  array  $defects  List of ['defect_type_id' => int, 'defect_count_pairs' => int, 'notes' => ?string]
+     * @param  array  $payload  ['order_shipment_id', 'machine_id', 'operator_id', 'production_date', 'shift', 'good_pcs'|'good_pairs', 'defect_pcs'|'defect_pairs', 'weight_kg', 'box_barcode'?]
+     * @param  array  $defects  List of ['defect_type_id' => int, 'defect_count_pcs'|'defect_count_pairs' => int, 'notes' => ?string]
      */
     public function recordOutput(array $payload, array $defects = []): ProductionBox
     {
         return DB::transaction(function () use ($payload, $defects) {
             $barcode = $payload['box_barcode'] ?? $this->generateBarcode((int) $payload['machine_id'], $payload['production_date'] ?? null);
+
+            $goodPcs = (int) ($payload['good_pcs'] ?? $payload['good_pairs'] ?? 0);
+            $defectPcs = (int) ($payload['defect_pcs'] ?? $payload['defect_pairs'] ?? 0);
 
             $box = ProductionBox::create([
                 'box_barcode' => $barcode,
@@ -38,8 +41,8 @@ class ProductionBoxService
                 'order_shipment_id' => (int) $payload['order_shipment_id'],
                 'machine_id' => (int) $payload['machine_id'],
                 'operator_id' => (int) $payload['operator_id'],
-                'good_pairs' => (int) ($payload['good_pairs'] ?? 0),
-                'defect_pairs' => (int) ($payload['defect_pairs'] ?? 0),
+                'good_pcs' => $goodPcs,
+                'defect_pcs' => $defectPcs,
                 'weight_kg' => (float) ($payload['weight_kg'] ?? 0.0),
                 'created_at' => now(),
             ]);
@@ -48,7 +51,7 @@ class ProductionBoxService
                 BoxDefect::create([
                     'production_box_id' => $box->id,
                     'defect_type_id' => (int) $defect['defect_type_id'],
-                    'defect_count_pairs' => (int) ($defect['defect_count_pairs'] ?? 1),
+                    'defect_count_pcs' => (int) ($defect['defect_count_pcs'] ?? $defect['defect_count_pairs'] ?? 1),
                     'notes' => $defect['notes'] ?? null,
                     'created_at' => now(),
                 ]);

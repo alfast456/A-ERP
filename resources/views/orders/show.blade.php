@@ -21,7 +21,7 @@
             </div>
             <div class="flex items-center space-x-3">
                 <span class="text-sm text-slate-500 font-medium">Total Kuantitas:</span>
-                <span class="text-2xl font-black text-slate-900">{{ number_format($order->total_ordered_pairs) }} <span class="text-sm font-normal text-slate-500">Pasang</span></span>
+                <span class="text-2xl font-black text-slate-900">{{ number_format($order->total_ordered_pcs) }} <span class="text-sm font-normal text-slate-500">Pcs</span></span>
             </div>
         </div>
     </div>
@@ -60,13 +60,13 @@
                                     <td class="px-4 py-2 text-xs">{{ $style->color_code }} / {{ $style->size }}</td>
                                     <td class="px-4 py-2 text-xs">Delivery #{{ $shipment->shipment_index }}</td>
                                     <td class="px-4 py-2 text-xs">{{ $shipment->target_delivery_date?->format('d M Y') }}</td>
-                                    <td class="px-4 py-2 text-right font-medium">{{ number_format($shipment->qty_pairs) }}</td>
+                                    <td class="px-4 py-2 text-right font-medium">{{ number_format($shipment->qty_pcs) }}</td>
                                     <td class="px-4 py-2 text-right font-semibold text-emerald-600">
-                                        {{ number_format($shipment->produced_good_pairs) }}
+                                        {{ number_format($shipment->produced_good_pcs) }}
                                     </td>
                                     <td class="px-4 py-2 text-center">
                                         <input type="hidden" name="items[{{ $itemIndex }}][shipment_id]" value="{{ $shipment->id }}">
-                                        <input type="number" name="items[{{ $itemIndex }}][new_qty]" value="{{ $shipment->qty_pairs }}" min="{{ $shipment->produced_good_pairs }}" required class="w-32 px-2 py-1 text-right border border-slate-300 rounded font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                        <input type="number" name="items[{{ $itemIndex }}][new_qty]" value="{{ $shipment->qty_pcs }}" min="{{ $shipment->produced_good_pcs }}" required class="w-32 px-2 py-1 text-right border border-slate-300 rounded font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
                                     </td>
                                 </tr>
                                 @php $itemIndex++; @endphp

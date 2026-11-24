@@ -26,8 +26,8 @@ class ProductionBox extends Model
         'machine_id',
         'factory_area_id',
         'operator_id',
-        'good_pairs',
-        'defect_pairs',
+        'good_pcs',
+        'defect_pcs',
         'weight_kg',
         'created_at',
     ];
@@ -41,11 +41,21 @@ class ProductionBox extends Model
             'shift_b' => 'integer',
             'shift_c' => 'integer',
             'no_label' => 'integer',
-            'good_pairs' => 'integer',
-            'defect_pairs' => 'integer',
+            'good_pcs' => 'integer',
+            'defect_pcs' => 'integer',
             'weight_kg' => 'decimal:3',
             'created_at' => 'datetime',
         ];
+    }
+
+    public function getGoodPairsAttribute(): int
+    {
+        return $this->good_pcs;
+    }
+
+    public function getDefectPairsAttribute(): int
+    {
+        return $this->defect_pcs;
     }
 
     public function shipment(): BelongsTo

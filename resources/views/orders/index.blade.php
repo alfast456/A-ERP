@@ -46,7 +46,7 @@
                         <th class="px-6 py-3">Buyer</th>
                         <th class="px-6 py-3">Season</th>
                         <th class="px-6 py-3">Tipe</th>
-                        <th class="px-6 py-3 text-right">Total Pasang</th>
+                        <th class="px-6 py-3 text-right">Total Pcs</th>
                         <th class="px-6 py-3">Tgl Order</th>
                         <th class="px-6 py-3">Status</th>
                         <th class="px-6 py-3 text-center">Aksi</th>
@@ -63,7 +63,7 @@
                                     {{ $order->order_type->value ?? $order->order_type }}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 text-right font-extrabold text-slate-900">{{ number_format($order->total_ordered_pairs) }}</td>
+                            <td class="px-6 py-4 text-right font-extrabold text-slate-900">{{ number_format($order->total_ordered_pcs) }}</td>
                             <td class="px-6 py-4 text-xs">{{ $order->order_date?->format('d M Y') ?? '-' }}</td>
                             <td class="px-6 py-4">
                                 @php

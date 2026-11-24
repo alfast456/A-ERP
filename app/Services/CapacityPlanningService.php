@@ -12,25 +12,25 @@ class CapacityPlanningService
      * Total Required Seconds = Target Pairs * SMV Seconds
      * Required Machines = ceil(Total Required Seconds / Available Seconds Per Machine)
      *
-     * @param  int  $targetPairs  Jumlah pasang yang harus diproduksi
-     * @param  float  $smvSeconds  SMV per pasang dalam detik
+     * @param  int  $targetPcs  Jumlah pcs yang harus diproduksi
+     * @param  float  $smvSeconds  SMV per pcs dalam detik
      * @param  int  $workingDays  Jumlah hari kerja efektif
      * @param  float  $dailyHours  Jam operasional per hari (default 24 jam untuk pabrik 3 shift)
      * @param  float  $efficiency  Target efisiensi lini rajut (contoh: 0.85 = 85%)
      */
     public function calculateRequiredMachines(
-        int $targetPairs,
+        int $targetPcs,
         float $smvSeconds,
         int $workingDays,
         float $dailyHours = 24.0,
         float $efficiency = 0.85
     ): int {
-        if ($targetPairs <= 0 || $workingDays <= 0 || $smvSeconds <= 0) {
+        if ($targetPcs <= 0 || $workingDays <= 0 || $smvSeconds <= 0) {
             return 0;
         }
 
         $availableSecondsPerMachine = $workingDays * $dailyHours * 3600 * $efficiency;
-        $totalRequiredSeconds = $targetPairs * $smvSeconds;
+        $totalRequiredSeconds = $targetPcs * $smvSeconds;
 
         return (int) ceil($totalRequiredSeconds / $availableSecondsPerMachine);
     }
@@ -39,7 +39,7 @@ class CapacityPlanningService
      * Hitung persentase beban kapasitas (load percentage) dari mesin aktif.
      *
      * @param  int  $activeMachines  Jumlah mesin yang aktif
-     * @param  int  $targetPairs  Target kuantitas pasang
+     * @param  int  $targetPcs  Target kuantitas pcs
      * @param  float  $smvSeconds  SMV detik
      * @param  int  $workingDays  Hari kerja
      * @param  float  $dailyHours  Jam operasional
@@ -47,7 +47,7 @@ class CapacityPlanningService
      */
     public function calculateLoadPercentage(
         int $activeMachines,
-        int $targetPairs,
+        int $targetPcs,
         float $smvSeconds,
         int $workingDays,
         float $dailyHours = 24.0,
@@ -58,7 +58,7 @@ class CapacityPlanningService
         }
 
         $totalCapacitySeconds = $activeMachines * $workingDays * $dailyHours * 3600 * $efficiency;
-        $requiredSeconds = $targetPairs * $smvSeconds;
+        $requiredSeconds = $targetPcs * $smvSeconds;
 
         return round(($requiredSeconds / $totalCapacitySeconds) * 100, 2);
     }

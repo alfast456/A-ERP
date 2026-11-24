@@ -24,7 +24,8 @@ class CapacityPlanningController extends Controller
         $totalMachines = Machine::count();
 
         // Calculate sample capacity forecast based on active orders
-        $totalOrderedPairs = (int) OrderShipment::sum('qty_pairs');
+        $totalOrderedPcs = (int) OrderShipment::sum('qty_pcs');
+        $totalOrderedPairs = $totalOrderedPcs; // for backward view compatibility
         $sampleSmvSeconds = 140.0; // standard average knitting SMV
         $workingHours = 24.0; // 3 shifts
         $efficiency = 0.85; // 85% plant standard OEE
@@ -33,7 +34,7 @@ class CapacityPlanningController extends Controller
         $totalDailyPlantOutput = $totalActiveMachines * $dailyCapacityPerMachine;
 
         $estimatedDaysToComplete = $totalDailyPlantOutput > 0
-            ? round($totalOrderedPairs / $totalDailyPlantOutput, 1)
+            ? round($totalOrderedPcs / $totalDailyPlantOutput, 1)
             : 0;
 
         $activeOrders = Order::where('status', 'IN_PRODUCTION')
@@ -45,6 +46,7 @@ class CapacityPlanningController extends Controller
             'factoryAreas',
             'totalActiveMachines',
             'totalMachines',
+            'totalOrderedPcs',
             'totalOrderedPairs',
             'dailyCapacityPerMachine',
             'totalDailyPlantOutput',
