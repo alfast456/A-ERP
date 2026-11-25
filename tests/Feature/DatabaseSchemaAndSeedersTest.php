@@ -27,10 +27,12 @@ class DatabaseSchemaAndSeedersTest extends TestCase
             'order_revision_items',
             'sample_approvals',
             'planning_allocations',
+            'daily_planning_loads',
             'machine_assignments',
             'capacity_forecasts',
             'monthly_targets',
             'order_bookings',
+            'order_booking_cancellations',
             'production_boxes',
             'box_defects',
             'rework_tracking',
@@ -40,6 +42,9 @@ class DatabaseSchemaAndSeedersTest extends TestCase
             'yarn_stock_balances',
             'yarn_transactions',
             'machine_downtimes',
+            'machine_service_records',
+            'machine_service_checklists',
+            'machine_waste_logs',
             'needle_consumptions',
             'maintenance_tickets',
             'maintenance_ticket_replies',
@@ -67,5 +72,15 @@ class DatabaseSchemaAndSeedersTest extends TestCase
     {
         $results = DB::table('view_order_shipment_progress')->limit(5)->get();
         $this->assertNotNull($results);
+    }
+
+    public function test_semantic_foreign_keys_and_columns_exist(): void
+    {
+        $this->assertTrue(Schema::hasColumns('box_defects', ['order_shipment_id', 'production_box_id', 'no_box', 'no_label', 'factory_area_id', 'defect_date']));
+        $this->assertTrue(Schema::hasColumns('rework_tracking', ['order_shipment_id', 'production_box_id', 'no_box', 'no_label', 'machine_id', 'rework_date']));
+        $this->assertTrue(Schema::hasColumns('daily_planning_loads', ['planning_allocation_id', 'plan_date', 'planned_machine_count', 'daily_target_pcs']));
+        $this->assertTrue(Schema::hasColumns('machine_assignments', ['planning_allocation_id', 'machine_id', 'order_shipment_id', 'start_time', 'stop_time']));
+        $this->assertTrue(Schema::hasColumns('sample_approvals', ['order_style_id', 'order_shipment_id', 'machine_id', 'mechanic_name']));
+        $this->assertTrue(Schema::hasColumns('audit_logs', ['user_id', 'actor_name', 'action']));
     }
 }

@@ -11,9 +11,18 @@
             <p class="text-sm text-slate-500 mt-1">Audit terperinci rekaman cacat rajut dan riwayat perbaikan kaos kaki (1,90 juta rekaman).</p>
         </div>
         <div class="flex items-center gap-2">
+            <a href="{{ route('reports.export.defects') }}" class="px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                📥 Export Defect Excel
+            </a>
             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                 Success Rate: {{ $repairResolutionRate }}%
             </span>
+            <a href="{{ route('quality.waste') }}" class="px-3.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                🗑️ Limbah Mesin (Waste)
+            </a>
+            <a href="{{ route('quality.defects.create') }}" class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition">
+                + Lapor Cacat (BS)
+            </a>
         </div>
     </div>
 
@@ -191,6 +200,7 @@
                             <th class="py-3 px-4 text-right">Scrapped</th>
                             <th class="py-3 px-4 text-center">Status</th>
                             <th class="py-3 px-4">Tanggal Masuk</th>
+                            <th class="py-3 px-4 text-center">Tindakan</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -231,6 +241,30 @@
                                 </td>
                                 <td class="py-3 px-4 text-slate-400 text-xs font-mono">
                                     {{ $rw->created_at?->format('d M Y') ?? '-' }}
+                                </td>
+                                <td class="py-3 px-4 text-center text-xs">
+                                    @if($rw->status->value === 'IN_REPAIR')
+                                        <div class="flex items-center justify-center gap-1.5">
+                                            <form action="{{ route('quality.rework.resolve', $rw) }}" method="POST">
+                                                @csrf
+                                                <input type="hidden" name="action_type" value="RESOLVE">
+                                                <input type="hidden" name="qty" value="{{ $rw->sent_pcs }}">
+                                                <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold transition" title="Kaos kaki berhasil diperbaiki (Good)">
+                                                    ✓ Sukses
+                                                </button>
+                                            </form>
+                                            <form action="{{ route('quality.rework.resolve', $rw) }}" method="POST">
+                                                @csrf
+                                                <input type="hidden" name="action_type" value="SCRAP">
+                                                <input type="hidden" name="qty" value="{{ $rw->sent_pcs }}">
+                                                <button type="submit" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-semibold transition" title="Tidak dapat diperbaiki (BS Murni)">
+                                                    ✕ Scrap
+                                                </button>
+                                            </form>
+                                        </div>
+                                    @else
+                                        <span class="text-slate-400 italic">Selesai</span>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

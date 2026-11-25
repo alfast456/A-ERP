@@ -10,6 +10,11 @@
             <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Live Sisa Order & Monitoring Produksi</h1>
             <p class="text-sm text-slate-500">Kalkulasi sisa order realtime dari view `view_order_shipment_progress` tanpa lag dan bebas dari risiko race-condition.</p>
         </div>
+        <div>
+            <a href="{{ route('reports.export.production') }}" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-sm transition">
+                📥 Export Excel (FastExcel)
+            </a>
+        </div>
     </div>
 
     <!-- 4 Summary KPI Cards -->

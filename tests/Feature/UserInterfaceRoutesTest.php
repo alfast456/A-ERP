@@ -99,6 +99,49 @@ class UserInterfaceRoutesTest extends TestCase
         $this->assertEquals(1500, $shipment->qty_pairs);
     }
 
+    public function test_orders_create_and_store_workflow(): void
+    {
+        $response = $this->get(route('orders.create'));
+        $response->assertOk();
+        $response->assertSee('Input Kontrak Order / SPK Baru');
+
+        $poNumber = 'PO-MANUAL-' . rand(1000, 9999);
+        $postResponse = $this->post(route('orders.store'), [
+            'po_number' => $poNumber,
+            'buyer_name' => 'ADIDAS ORIGINAL',
+            'season' => 'SS27',
+            'order_date' => now()->toDateString(),
+            'style_code' => 'AD-RUN-01',
+            'color_code' => 'WHITE',
+            'size' => 'L',
+            'jarum' => '168N',
+            'qty_pcs' => 15000,
+            'target_delivery_date' => now()->addDays(60)->toDateString(),
+        ]);
+
+        $postResponse->assertSessionHas('success');
+        $this->assertDatabaseHas('orders', [
+            'po_number' => $poNumber,
+            'buyer_name' => 'ADIDAS ORIGINAL',
+            'status' => 'CONFIRMED',
+        ]);
+    }
+
+    public function test_orders_cancel_workflow(): void
+    {
+        $order = $this->createOrderWithShipment();
+
+        $response = $this->post(route('orders.cancel', $order), [
+            'reason' => 'Dibatalkan oleh PPIC karena penyesuaian buyer',
+        ]);
+
+        $response->assertRedirect(route('orders.show', $order));
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'CANCELLED',
+        ]);
+    }
+
     public function test_production_monitoring_route_is_accessible(): void
     {
         $response = $this->get(route('production.monitoring'));

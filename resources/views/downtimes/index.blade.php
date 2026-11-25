@@ -11,7 +11,12 @@
             <p class="text-sm text-slate-500 mt-1">Audit log kerusakan mesin rajut dan tindakan perbaikan teknisi (1,38 juta rekaman).</p>
         </div>
         <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-400">Total Kejadian Terdata: <strong>{{ number_format($totalDowntimes) }}</strong></span>
+            <a href="{{ route('reports.export.downtimes') }}" class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50">
+                📥 Export Downtime Excel
+            </a>
+            <a href="{{ route('downtimes.create') }}" class="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 shadow-sm">
+                + Catat Downtime
+            </a>
         </div>
     </div>
 

@@ -13,8 +13,13 @@ class BoxDefect extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'order_shipment_id',
         'production_box_id',
         'defect_type_id',
+        'factory_area_id',
+        'no_box',
+        'no_label',
+        'defect_date',
         'defect_count_pcs',
         'notes',
         'created_at',
@@ -23,6 +28,7 @@ class BoxDefect extends Model
     protected function casts(): array
     {
         return [
+            'defect_date' => 'date',
             'defect_count_pcs' => 'integer',
             'created_at' => 'datetime',
         ];
@@ -33,9 +39,19 @@ class BoxDefect extends Model
         return $this->defect_count_pcs;
     }
 
+    public function orderShipment(): BelongsTo
+    {
+        return $this->belongsTo(OrderShipment::class);
+    }
+
     public function productionBox(): BelongsTo
     {
         return $this->belongsTo(ProductionBox::class);
+    }
+
+    public function factoryArea(): BelongsTo
+    {
+        return $this->belongsTo(FactoryArea::class);
     }
 
     public function defectType(): BelongsTo

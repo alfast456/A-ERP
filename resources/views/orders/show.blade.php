@@ -19,9 +19,22 @@
                 <h1 class="text-2xl font-black text-slate-900 tracking-tight">{{ $order->po_number }}</h1>
                 <p class="text-sm text-slate-500">Buyer: <strong class="text-slate-800">{{ $order->buyer_name }}</strong> | Season: {{ $order->season ?? '-' }} | Tanggal Order: {{ $order->order_date?->format('d M Y') }}</p>
             </div>
-            <div class="flex items-center space-x-3">
-                <span class="text-sm text-slate-500 font-medium">Total Kuantitas:</span>
-                <span class="text-2xl font-black text-slate-900">{{ number_format($order->total_ordered_pcs) }} <span class="text-sm font-normal text-slate-500">Pcs</span></span>
+            <div class="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+                <div class="text-right">
+                    <span class="text-xs text-slate-500 font-medium block">Total Kuantitas:</span>
+                    <span class="text-2xl font-black text-slate-900">{{ number_format($order->total_ordered_pcs) }} <span class="text-sm font-normal text-slate-500">Pcs</span></span>
+                </div>
+                @if($order->status->value !== 'CANCELLED')
+                    <form action="{{ route('orders.cancel', $order) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin membatalkan Order {{ $order->po_number }}?')">
+                        @csrf
+                        <input type="hidden" name="reason" value="Dibatalkan via sistem manajemen order">
+                        <button type="submit" class="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition">
+                            Batalkan Order
+                        </button>
+                    </form>
+                @else
+                    <span class="px-3 py-1 text-xs font-bold bg-rose-100 text-rose-800 rounded-full">CANCELLED</span>
+                @endif
             </div>
         </div>
     </div>

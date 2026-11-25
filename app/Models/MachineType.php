@@ -36,4 +36,9 @@ class MachineType extends Model
     {
         return $this->hasMany(OrderStyle::class);
     }
+
+    public function getNameAttribute(): string
+    {
+        return "{$this->brand} {$this->model_name}" . ($this->needle_count ? " ({$this->needle_count}N)" : '');
+    }
 }

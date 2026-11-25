@@ -15,6 +15,8 @@ class MachineAssignment extends Model
         'machine_id',
         'order_shipment_id',
         'plan_date',
+        'start_time',
+        'stop_time',
         'target_dz',
         'target_pcs',
     ];
@@ -23,6 +25,8 @@ class MachineAssignment extends Model
     {
         return [
             'plan_date' => 'date',
+            'start_time' => 'datetime',
+            'stop_time' => 'datetime',
             'target_dz' => 'decimal:2',
             'target_pcs' => 'integer',
         ];

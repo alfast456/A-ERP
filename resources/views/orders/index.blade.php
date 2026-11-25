@@ -10,7 +10,22 @@
             <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Manajemen Order & Revisi</h1>
             <p class="text-sm text-slate-500">Kelola kontrak PO pembeli, varian SKU style, jadwal pengiriman, dan riwayat revisi.</p>
         </div>
+        <div class="flex items-center gap-2">
+            <button onclick="document.getElementById('importModal').classList.remove('hidden')"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50">
+                📥 Import Excel
+            </button>
+            <a href="{{ route('orders.create') }}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 shadow-sm transition">
+                + Input Order SPK Baru
+            </a>
+        </div>
     </div>
+
+    @if(session('success'))
+        <div class="p-4 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm">
+            {{ session('success') }}
+        </div>
+    @endif
 
     <!-- Filter Form -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
@@ -101,6 +116,29 @@
                 {{ $orders->links() }}
             </div>
         @endif
+    </div>
+
+    <!-- Modal Import Excel -->
+    <div id="importModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/50 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Import Order dari Excel / CSV</h3>
+                <button onclick="document.getElementById('importModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <form action="{{ route('orders.import') }}" method="POST" enctype="multipart/form-data" class="mt-4 space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pilih File Spreadsheet (.xlsx, .xls, .csv) *</label>
+                    <input type="file" name="file" required accept=".xlsx,.xls,.csv"
+                           class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100">
+                    <p class="text-xs text-gray-400 mt-2">Kolom acuan: `po_number`, `buyer_name`, `style_code`, `qty_pcs`, `delivery_date`.</p>
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <button type="button" onclick="document.getElementById('importModal').classList.add('hidden')" class="px-4 py-2 border rounded-lg text-sm text-gray-700 dark:text-gray-300">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700">Unggah & Proses</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 @endsection

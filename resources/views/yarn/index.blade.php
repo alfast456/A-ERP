@@ -11,7 +11,12 @@
             <p class="text-sm text-slate-500 mt-1">Monitoring stok benang aktif (cones & kilogram) per area lantai rajut.</p>
         </div>
         <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-400">Total Lot Terdata: <strong>{{ number_format($totalLots) }}</strong></span>
+            <a href="{{ route('yarn.requirements') }}" class="inline-flex items-center px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50">
+                Kebutuhan PO (Demand)
+            </a>
+            <a href="{{ route('yarn.transactions') }}" class="inline-flex items-center px-3.5 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 shadow-sm">
+                + Mutasi & Transaksi Benang
+            </a>
         </div>
     </div>
 

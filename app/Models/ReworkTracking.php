@@ -16,6 +16,7 @@ class ReworkTracking extends Model
     protected $table = 'rework_tracking';
 
     protected $fillable = [
+        'order_shipment_id',
         'production_box_id',
         'defect_type_id',
         'sent_pcs',
@@ -23,6 +24,10 @@ class ReworkTracking extends Model
         'scrapped_pcs',
         'status',
         'repair_area_id',
+        'machine_id',
+        'no_box',
+        'no_label',
+        'rework_date',
         'technician_id',
         'repaired_at',
         'created_at',
@@ -31,6 +36,7 @@ class ReworkTracking extends Model
     protected function casts(): array
     {
         return [
+            'rework_date' => 'date',
             'sent_pcs' => 'integer',
             'repaired_pcs' => 'integer',
             'scrapped_pcs' => 'integer',
@@ -55,9 +61,19 @@ class ReworkTracking extends Model
         return $this->scrapped_pcs;
     }
 
+    public function orderShipment(): BelongsTo
+    {
+        return $this->belongsTo(OrderShipment::class);
+    }
+
     public function productionBox(): BelongsTo
     {
         return $this->belongsTo(ProductionBox::class);
+    }
+
+    public function machine(): BelongsTo
+    {
+        return $this->belongsTo(Machine::class);
     }
 
     public function defectType(): BelongsTo

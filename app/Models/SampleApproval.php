@@ -15,8 +15,10 @@ class SampleApproval extends Model
 
     protected $fillable = [
         'order_style_id',
+        'order_shipment_id',
         'machine_id',
         'sample_stage',
+        'mechanic_name',
         'mechanic_approved_by',
         'qa_approved_by',
         'merchandiser_approved_by',
@@ -59,5 +61,10 @@ class SampleApproval extends Model
     public function merchandiser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'merchandiser_approved_by');
+    }
+
+    public function orderShipment(): BelongsTo
+    {
+        return $this->belongsTo(OrderShipment::class);
     }
 }

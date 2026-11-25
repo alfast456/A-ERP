@@ -50,4 +50,9 @@ class FactoryArea extends Model
     {
         return $this->hasMany(YarnStockBalance::class);
     }
+
+    public function getNameAttribute(): string
+    {
+        return $this->area_name ?? $this->area_code ?? '';
+    }
 }

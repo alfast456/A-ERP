@@ -47,4 +47,9 @@ class PlanningAllocation extends Model
     {
         return $this->hasMany(MachineAssignment::class);
     }
+
+    public function dailyLoads(): HasMany
+    {
+        return $this->hasMany(DailyPlanningLoad::class);
+    }
 }

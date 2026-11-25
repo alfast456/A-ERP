@@ -530,22 +530,30 @@ class MigrateLegacyDataCommand extends Command
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
             DB::table('sample_approvals')->truncate();
 
-            $this->line('  → Migrasi PPS dengan Relasi Order Style & Mesin Fisik...');
+            $this->line('  → Migrasi PPS dengan Relasi Order Style, SKU Shipment, Mechanic Name & Mesin...');
             DB::statement("
                 INSERT INTO a_erp.sample_approvals
-                (id, order_style_id, machine_id, sample_stage, mechanic_approved_by, qa_approved_by, merchandiser_approved_by, is_approved_for_bulk, remarks, approved_at, created_at)
+                (id, order_style_id, order_shipment_id, machine_id, sample_stage, mechanic_name, mechanic_approved_by, qa_approved_by, merchandiser_approved_by, is_approved_for_bulk, remarks, approved_at, created_at)
                 SELECT 
                     p.id_pps AS id,
                     COALESCE(s.order_style_id, 1) AS order_style_id,
-                    COALESCE(m.id, 1) AS machine_id,
+                    mp.idapsperstyle AS order_shipment_id,
+                    m.id AS machine_id,
                     'PRE_PRODUCTION' AS sample_stage,
+                    SUBSTRING(p.mechanic, 1, 100) AS mechanic_name,
                     1 AS mechanic_approved_by,
                     1 AS qa_approved_by,
                     1 AS merchandiser_approved_by,
                     CASE WHEN p.pps_status = 'approved' THEN 1 ELSE 0 END AS is_approved_for_bulk,
                     SUBSTRING(COALESCE(NULLIF(TRIM(p.notes), ''), p.history, 'PPS Approval Record'), 1, 500) AS remarks,
-                    COALESCE(p.acc_qad, p.acc_mr, p.acc_fu, p.updated_at, NOW()) AS approved_at,
-                    COALESCE(p.created_at, NOW()) AS created_at
+                    CASE 
+                        WHEN p.acc_qad IS NOT NULL AND p.acc_qad != '0000-00-00 00:00:00' THEN p.acc_qad
+                        WHEN p.acc_mr IS NOT NULL AND p.acc_mr != '0000-00-00 00:00:00' THEN p.acc_mr
+                        WHEN p.acc_fu IS NOT NULL AND p.acc_fu != '0000-00-00 00:00:00' THEN p.acc_fu
+                        WHEN p.updated_at IS NOT NULL AND p.updated_at != '0000-00-00 00:00:00' THEN p.updated_at
+                        ELSE NULL 
+                    END AS approved_at,
+                    COALESCE(NULLIF(p.created_at, '0000-00-00 00:00:00'), NOW()) AS created_at
                 FROM capacity_system.pps p
                 LEFT JOIN capacity_system.mesin_perinisial mp ON mp.id_mesin_perinisial = p.id_mesin_perinisial
                 LEFT JOIN a_erp.order_shipments s ON s.id = mp.idapsperstyle
@@ -565,12 +573,13 @@ class MigrateLegacyDataCommand extends Command
     protected function migratePlanning($legacyDb, bool $isDryRun, ?int $limit): void
     {
         $this->newLine();
-        $this->info('▶ [FASE PLANNING] Memproses Alokasi Kapasitas & Jadwal Mesin (detail_planning & tanggal_planning)...');
+        $this->info('▶ [FASE PLANNING] Memproses Alokasi Kapasitas, Beban Harian & Penugasan Mesin...');
 
         $limitSql = $limit ? "LIMIT {$limit}" : "";
 
         if (!$isDryRun) {
             DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            DB::table('daily_planning_loads')->truncate();
             DB::table('machine_assignments')->truncate();
             DB::table('planning_allocations')->truncate();
 
@@ -581,55 +590,89 @@ class MigrateLegacyDataCommand extends Command
                 (id, order_id, factory_area_id, allocated_pcs, target_start_date, target_end_date, created_at, updated_at)
                 SELECT 
                     dp.id_detail_pln AS id,
-                    COALESCE(st.order_id, 1) AS order_id,
+                    COALESCE(mpn_order.order_id, st.order_id, 1) AS order_id,
                     COALESCE(fa.id, 1) AS factory_area_id,
-                    COALESCE(SUM(tp.mesin * 100), 1000) AS allocated_pcs,
-                    COALESCE(MIN(NULLIF(tp.start_mesin, '0000-00-00')), CURDATE()) AS target_start_date,
-                    COALESCE(MAX(NULLIF(tp.stop_mesin, '0000-00-00')), CURDATE()) AS target_end_date,
+                    COALESCE(daily_sum.tot_pcs, 1000) AS allocated_pcs,
+                    COALESCE(daily_sum.min_start, CURDATE()) AS target_start_date,
+                    COALESCE(daily_sum.max_stop, CURDATE()) AS target_end_date,
                     NOW(), NOW()
                 FROM capacity_system.detail_planning dp
+                LEFT JOIN (
+                    SELECT 
+                        mpn.id_detail_plan,
+                        MIN(s.order_id) AS order_id
+                    FROM capacity_system.mesin_pernomor mpn
+                    JOIN a_erp.order_shipments sh ON sh.id = mpn.idapsperstyle
+                    JOIN a_erp.order_styles s ON s.id = sh.order_style_id
+                    GROUP BY mpn.id_detail_plan
+                ) mpn_order ON mpn_order.id_detail_plan = dp.id_detail_pln
                 LEFT JOIN (
                     SELECT style_code, MIN(order_id) as order_id 
                     FROM a_erp.order_styles 
                     GROUP BY style_code
                 ) st ON st.style_code = dp.model
-                LEFT JOIN capacity_system.tanggal_planning tp ON tp.id_detail_pln = dp.id_detail_pln
+                LEFT JOIN (
+                    SELECT 
+                        id_detail_pln,
+                        SUM(mesin * 100) AS tot_pcs,
+                        MIN(NULLIF(start_mesin, '0000-00-00')) AS min_start,
+                        MAX(NULLIF(stop_mesin, '0000-00-00')) AS max_stop
+                    FROM capacity_system.tanggal_planning
+                    GROUP BY id_detail_pln
+                ) daily_sum ON daily_sum.id_detail_pln = dp.id_detail_pln
                 LEFT JOIN a_erp.factory_areas fa ON fa.id = 1
-                GROUP BY dp.id_detail_pln
                 {$limitSql};
             ");
 
-            // 2. Machine Assignments
-            $this->line('  → Migrasi Jadwal Assignment Mesin (tanggal_planning -> machine_assignments)...');
+            // 2. Daily Planning Loads (tanggal_planning -> daily_planning_loads)
+            $this->line('  → Migrasi Beban Kapasitas Harian (tanggal_planning -> daily_planning_loads)...');
             DB::statement("
-                INSERT INTO a_erp.machine_assignments
-                (id, planning_allocation_id, machine_id, order_shipment_id, plan_date, target_dz, target_pcs, created_at, updated_at)
+                INSERT INTO a_erp.daily_planning_loads
+                (id, planning_allocation_id, plan_date, planned_machine_count, daily_target_pcs, start_date, stop_date, created_at, updated_at)
                 SELECT 
                     tp.id AS id,
                     tp.id_detail_pln AS planning_allocation_id,
-                    COALESCE(m.id, 1) AS machine_id,
-                    COALESCE(sh.id, 1) AS order_shipment_id,
                     COALESCE(NULLIF(tp.date, '0000-00-00'), CURDATE()) AS plan_date,
-                    ROUND(COALESCE(tp.mesin, 0) * 8.33, 2) AS target_dz,
-                    COALESCE(tp.mesin * 100, 0) AS target_pcs,
+                    GREATEST(0, COALESCE(tp.mesin, 0)) AS planned_machine_count,
+                    GREATEST(0, COALESCE(tp.mesin, 0) * 100) AS daily_target_pcs,
+                    NULLIF(tp.start_mesin, '0000-00-00') AS start_date,
+                    NULLIF(tp.stop_mesin, '0000-00-00') AS stop_date,
                     NOW(), NOW()
                 FROM capacity_system.tanggal_planning tp
-                JOIN capacity_system.detail_planning dp ON dp.id_detail_pln = tp.id_detail_pln
-                LEFT JOIN a_erp.machines m ON m.id = tp.mesin
-                LEFT JOIN (
-                    SELECT MIN(s.id) as id, st.style_code 
-                    FROM a_erp.order_shipments s 
-                    JOIN a_erp.order_styles st ON st.id = s.order_style_id
-                    GROUP BY st.style_code
-                ) sh ON sh.style_code = dp.model
+                WHERE tp.id_detail_pln IN (SELECT id FROM a_erp.planning_allocations)
+                {$limitSql};
+            ");
+
+            // 3. Machine Assignments (mesin_pernomor -> machine_assignments)
+            $this->line('  → Migrasi Penugasan Fisik Mesin Rajut (mesin_pernomor -> machine_assignments)...');
+            DB::statement("
+                INSERT INTO a_erp.machine_assignments
+                (id, planning_allocation_id, machine_id, order_shipment_id, plan_date, start_time, stop_time, target_dz, target_pcs, created_at, updated_at)
+                SELECT 
+                    mpn.id AS id,
+                    COALESCE(pa.id, 1) AS planning_allocation_id,
+                    COALESCE(m.id, 1) AS machine_id,
+                    COALESCE(s.id, 1) AS order_shipment_id,
+                    DATE(COALESCE(NULLIF(mpn.start_mesin, '0000-00-00 00:00:00'), NOW())) AS plan_date,
+                    NULLIF(mpn.start_mesin, '0000-00-00 00:00:00') AS start_time,
+                    NULLIF(mpn.stop_mesin, '0000-00-00 00:00:00') AS stop_time,
+                    ROUND(COALESCE(mpn.target, 0) / 12, 2) AS target_dz,
+                    COALESCE(mpn.target, 0) AS target_pcs,
+                    COALESCE(NULLIF(mpn.created_at, '0000-00-00 00:00:00'), NOW()) AS created_at,
+                    COALESCE(NULLIF(mpn.updated_at, '0000-00-00 00:00:00'), NOW()) AS updated_at
+                FROM capacity_system.mesin_pernomor mpn
+                LEFT JOIN a_erp.planning_allocations pa ON pa.id = mpn.id_detail_plan
+                LEFT JOIN a_erp.machines m ON m.id = mpn.id_mesin
+                LEFT JOIN a_erp.order_shipments s ON s.id = mpn.idapsperstyle
                 {$limitSql};
             ");
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
         }
 
         $allocCount = DB::table('planning_allocations')->count();
+        $loadCount = DB::table('daily_planning_loads')->count();
         $assignCount = DB::table('machine_assignments')->count();
-        $this->info("  ✓ Fase Planning Selesai: {$allocCount} Alokasi & {$assignCount} Machine Assignments dimigrasi.");
+        $this->info("  ✓ Fase Planning Selesai: {$allocCount} Alokasi, {$loadCount} Beban Harian & {$assignCount} Machine Assignments dimigrasi.");
     }
 
     /**
@@ -647,7 +690,7 @@ class MigrateLegacyDataCommand extends Command
             DB::table('order_revision_items')->truncate();
             DB::table('order_revisions')->truncate();
 
-            // 1. Order Revisions
+            // 1. Order Revisions dari history_revisi
             $this->line('  → Migrasi Header Revisi (history_revisi -> order_revisions)...');
             DB::statement("
                 INSERT INTO a_erp.order_revisions
@@ -671,14 +714,34 @@ class MigrateLegacyDataCommand extends Command
                 {$limitSql};
             ");
 
-            // 2. Order Revision Items (Cancelled orders)
+            // 2. Generate Revision Header untuk Cancellation Items (data_cancel_order)
+            $this->line('  → Membuat Header Revisi Pembatalan per Order Terkait...');
+            DB::statement("
+                INSERT INTO a_erp.order_revisions
+                (id, order_id, revision_number, revision_date, reason_notes, requested_by, approved_by, status)
+                SELECT 
+                    100000 + st.order_id AS id,
+                    st.order_id,
+                    99 AS revision_number,
+                    NOW() AS revision_date,
+                    'Order Shipments Cancellation (data_cancel_order)' AS reason_notes,
+                    1 AS requested_by,
+                    1 AS approved_by,
+                    'APPROVED' AS status
+                FROM capacity_system.data_cancel_order c
+                JOIN a_erp.order_shipments s ON s.id = c.idapsperstyle
+                JOIN a_erp.order_styles st ON st.id = s.order_style_id
+                GROUP BY st.order_id;
+            ");
+
+            // 3. Order Revision Items (Cancelled orders) dengan relasi header akurat
             $this->line('  → Migrasi Detail Pembatalan Item (data_cancel_order -> order_revision_items)...');
             DB::statement("
                 INSERT INTO a_erp.order_revision_items
                 (id, order_revision_id, order_shipment_id, old_qty, new_qty, delta_qty, created_at)
                 SELECT 
                     c.id AS id,
-                    1 AS order_revision_id,
+                    (100000 + st.order_id) AS order_revision_id,
                     c.idapsperstyle AS order_shipment_id,
                     COALESCE(s.qty_pcs, 0) + c.qty_cancel AS old_qty,
                     COALESCE(s.qty_pcs, 0) AS new_qty,
@@ -686,6 +749,7 @@ class MigrateLegacyDataCommand extends Command
                     NOW() AS created_at
                 FROM capacity_system.data_cancel_order c
                 JOIN a_erp.order_shipments s ON s.id = c.idapsperstyle
+                JOIN a_erp.order_styles st ON st.id = s.order_style_id
                 {$limitSql};
             ");
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
@@ -777,40 +841,54 @@ class MigrateLegacyDataCommand extends Command
             DB::table('rework_tracking')->truncate();
 
             // 4.1 Box Defects
-            $this->line('  → Migrasi Detail Cacat Box (data_bs)...');
+            $this->line('  → Migrasi Detail Cacat Box (data_bs dengan relasi SKU Shipment & Box Fisik)...');
             DB::statement("
                 INSERT INTO a_erp.box_defects 
-                (id, production_box_id, defect_type_id, defect_count_pcs, notes, created_at)
+                (id, order_shipment_id, production_box_id, defect_type_id, factory_area_id, no_box, no_label, defect_date, defect_count_pcs, notes, created_at)
                 SELECT 
                     b.idbs AS id,
-                    COALESCE(b.idapsperstyle, 1) AS production_box_id,
+                    b.idapsperstyle AS order_shipment_id,
+                    pb.id AS production_box_id,
                     COALESCE(dt.id, 1) AS defect_type_id,
+                    fa.id AS factory_area_id,
+                    b.no_box,
+                    b.no_label,
+                    NULLIF(b.tgl_instocklot, '0000-00-00') AS defect_date,
                     COALESCE(b.qty, 1) AS defect_count_pcs,
                     SUBSTRING(CONCAT('Legacy BS: ', COALESCE(b.kode_deffect, 'N/A'), ' | Area: ', COALESCE(b.area, 'N/A'), ' | Box: ', COALESCE(b.no_box, '-'), ' | Label: ', COALESCE(b.no_label, '-')), 1, 255) AS notes,
-                    COALESCE(b.created_at, NOW()) AS created_at
+                    COALESCE(NULLIF(b.created_at, '0000-00-00 00:00:00'), NOW()) AS created_at
                 FROM capacity_system.data_bs b
+                LEFT JOIN a_erp.production_boxes pb ON pb.order_shipment_id = b.idapsperstyle AND pb.no_box = b.no_box
                 LEFT JOIN a_erp.defect_types dt ON dt.defect_code = b.kode_deffect
+                LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(b.area))
                 {$limitSql};
             ");
 
-            // 4.2 Rework Tracking with accurate factory area
+            // 4.2 Rework Tracking with accurate shipment, machine, and factory area
             $this->line('  → Migrasi Riwayat Perbaikan (perbaikan_area)...');
             DB::statement("
                 INSERT INTO a_erp.rework_tracking 
-                (id, production_box_id, defect_type_id, sent_pcs, repaired_pcs, scrapped_pcs, status, repair_area_id, created_at)
+                (id, order_shipment_id, production_box_id, defect_type_id, sent_pcs, repaired_pcs, scrapped_pcs, status, repair_area_id, machine_id, no_box, no_label, rework_date, created_at)
                 SELECT 
                     r.id_perbaikan AS id,
-                    COALESCE(r.idapsperstyle, 1) AS production_box_id,
+                    r.idapsperstyle AS order_shipment_id,
+                    pb.id AS production_box_id,
                     COALESCE(dt.id, 1) AS defect_type_id,
                     COALESCE(r.qty, 1) AS sent_pcs,
                     CASE WHEN r.out_pb = '1' THEN COALESCE(r.qty, 1) ELSE 0 END AS repaired_pcs,
                     0 AS scrapped_pcs,
                     CASE WHEN r.out_pb = '1' THEN 'RESOLVED' ELSE 'IN_REPAIR' END AS status,
                     COALESCE(fa.id, 1) AS repair_area_id,
-                    COALESCE(r.created_at, NOW()) AS created_at
+                    m.id AS machine_id,
+                    r.no_box,
+                    r.no_label,
+                    NULLIF(r.tgl_perbaikan, '0000-00-00') AS rework_date,
+                    COALESCE(NULLIF(r.created_at, '0000-00-00 00:00:00'), NOW()) AS created_at
                 FROM capacity_system.perbaikan_area r
+                LEFT JOIN a_erp.production_boxes pb ON pb.order_shipment_id = r.idapsperstyle AND pb.no_box = r.no_box
                 LEFT JOIN a_erp.defect_types dt ON dt.defect_code = r.kode_deffect
                 LEFT JOIN a_erp.factory_areas fa ON fa.area_code = UPPER(TRIM(r.area))
+                LEFT JOIN a_erp.machines m ON m.machine_number = CONCAT(UPPER(TRIM(r.area)), '-MC', LPAD(CAST(r.no_mc AS SIGNED), 3, '0'))
                 {$limitSql};
             ");
             DB::statement('SET FOREIGN_KEY_CHECKS=1;');
@@ -936,10 +1014,11 @@ class MigrateLegacyDataCommand extends Command
         if (!$isDryRun) {
             DB::statement("
                 INSERT IGNORE INTO a_erp.audit_logs 
-                (id, user_id, action, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at)
+                (id, user_id, actor_name, action, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at)
                 SELECT 
                     a.id_log AS id,
-                    1 AS user_id,
+                    u.id AS user_id,
+                    a.actor_name,
                     COALESCE(NULLIF(TRIM(a.action), ''), 'LOG') AS action,
                     COALESCE(NULLIF(TRIM(a.module), ''), 'SYSTEM') AS table_name,
                     COALESCE(CAST(NULLIF(a.ref_id, '') AS UNSIGNED), 0) AS record_id,
@@ -947,8 +1026,9 @@ class MigrateLegacyDataCommand extends Command
                     CASE WHEN a.payload_new IS NOT NULL AND JSON_VALID(a.payload_new) THEN a.payload_new ELSE NULL END AS new_values,
                     a.ip_address,
                     a.user_agent,
-                    COALESCE(a.log_time, NOW()) AS created_at
+                    COALESCE(NULLIF(a.log_time, '0000-00-00 00:00:00'), NOW()) AS created_at
                 FROM capacity_system.audit_logs a
+                LEFT JOIN a_erp.users u ON u.username = a.actor_name
                 {$limitSql};
             ");
         }
@@ -1321,7 +1401,8 @@ class MigrateLegacyDataCommand extends Command
             ['Shipments (apsperstyle)', $legacyDb->table('apsperstyle')->count(), DB::table('order_shipments')->count()],
             ['Sample Approvals (pps)', $legacyDb->table('pps')->count(), DB::table('sample_approvals')->count()],
             ['Planning Allocations (detail_planning)', $legacyDb->table('detail_planning')->count(), DB::table('planning_allocations')->count()],
-            ['Machine Assignments (tanggal_planning)', $legacyDb->table('tanggal_planning')->count(), DB::table('machine_assignments')->count()],
+            ['Daily Planning Loads (tanggal_planning)', $legacyDb->table('tanggal_planning')->count(), DB::table('daily_planning_loads')->count()],
+            ['Machine Assignments (mesin_pernomor)', $legacyDb->table('mesin_pernomor')->count(), DB::table('machine_assignments')->count()],
             ['Flow Rute (master_flow_proses)', $legacyDb->table('master_flow_proses')->count(), DB::table('flow_templates')->count()],
             ['Target Bulanan (target_export)', $legacyDb->table('target_export')->count(), DB::table('monthly_targets')->count()],
             ['Order Revisions (history_revisi)', $legacyDb->table('history_revisi')->count(), DB::table('order_revisions')->count()],
